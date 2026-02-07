@@ -58,7 +58,8 @@
     shown01: 0,
     rafId: 0,
 
-    musicEl: null
+    musicEl: null,
+    musicResumeArmed: false
   };
 
   // =========================
@@ -79,6 +80,11 @@
 
     renderScreen();
 
+    // Важно: после F5 музыку нельзя автозапускать без жеста пользователя,
+    // поэтому если ранее музыка уже запускалась, разрешаем старт с начала
+    // по первому клику/клавише на странице. [web:121][web:17]
+    armMusicResumeOnNextUserGestureIfNeeded();
+
     if (isDev()) {
       window.__valentineDebug = {
         getState: function(){ return state; },
@@ -94,7 +100,9 @@
           runtime.shown01 = 0;
           stopLoadingLoop();
           runtime.musicEl = null;
+          runtime.musicResumeArmed = false;
           renderScreen();
+          armMusicResumeOnNextUserGestureIfNeeded();
         }
       };
     }
@@ -240,10 +248,10 @@
       btn.textContent = UI.START_BTN;
 
       btn.addEventListener('click', function () {
-        // ТЗ: старт музыки строго по клику “Начать”, громкость ~50%
-        startMusicFromUserGesture();
+        // ТЗ: старт музыки строго по клику “Начать”
+        startMusicFromUserGesture(); // play() может быть заблокирован и возвращает Promise [web:17]
 
-        // ТЗ: START → ПРОЛОГ: лёгкий zoom-in фона ~400ms + fade-in пролога
+        // START → ПРОЛОГ: лёгкий zoom-in фона ~400ms + fade-in пролога
         zoomBackgroundIn();
 
         goToScreen('prologue');
@@ -294,31 +302,63 @@
   // =========================
 
   function startMusicFromUserGesture() {
-    // Если уже создавали элемент — не пересоздаём
     if (!runtime.musicEl) {
       runtime.musicEl = new Audio();
       runtime.musicEl.preload = 'auto';
       runtime.musicEl.src = ASSETS.audioMusic;
-
-      // volume: число 0..1, 0.5 = ~50% [MDN]
-      runtime.musicEl.volume = 0.5;
+      runtime.musicEl.volume = 0.5; // 0..1 (примерно 50%)
     }
 
-    // play() возвращает Promise и может быть отклонён (например, если браузер блокирует) [MDN]
-    var p = runtime.musicEl.play();
+    var p = runtime.musicEl.play(); // возвращает Promise, может быть отклонён [web:17]
     if (p && typeof p.then === 'function') {
       p.then(function () {
         state.audio.musicStarted = true;
         saveState();
       }).catch(function (e) {
         console.warn('Music play() blocked/failed:', e);
-        // Не показываем UI (не задано ТЗ), просто не ставим musicStarted=true.
       });
     } else {
-      // На очень старых браузерах Promise может отсутствовать
       state.audio.musicStarted = true;
       saveState();
     }
+  }
+
+  function armMusicResumeOnNextUserGestureIfNeeded() {
+    // Если пользователь уже запускал музыку раньше, после F5 мы можем стартовать её заново,
+    // но строго по пользовательскому жесту (клик/клавиша). [web:121]
+    if (!state.audio || state.audio.musicStarted !== true) return;
+    if (runtime.musicResumeArmed) return;
+
+    // Не делаем это на LOADING, чтобы не “подменять” правило “музыка по клику Начать”
+    if (state.screenId === 'loading' || state.screenId === 'start') return;
+
+    runtime.musicResumeArmed = true;
+
+    var fired = false;
+
+    function fireOnce() {
+      if (fired) return;
+      fired = true;
+
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+
+      // Запуск с начала (currentTime не восстанавливаем) — достаточно просто play()
+      startMusicFromUserGesture();
+    }
+
+    function onPointerDown() {
+      fireOnce();
+    }
+
+    function onKeyDown(e) {
+      // Любая клавиша — это тоже user gesture, но ограничим Enter/Space для “понятности”
+      if (!e) return;
+      if (e.key === 'Enter' || e.key === ' ') fireOnce();
+    }
+
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown, true);
   }
 
   // =========================
