@@ -347,18 +347,28 @@
       startMusicFromUserGesture();
     }
 
-    function onPointerDown() {
-      fireOnce();
-    }
+document.addEventListener('click', onClick, true);
+document.addEventListener('keydown', onKeyDown, true);
 
-    function onKeyDown(e) {
-      // Любая клавиша — это тоже user gesture, но ограничим Enter/Space для “понятности”
-      if (!e) return;
-      if (e.key === 'Enter' || e.key === ' ') fireOnce();
-    }
+function fireOnce() {
+  if (fired) return;
+  fired = true;
 
-    document.addEventListener('pointerdown', onPointerDown, true);
-    document.addEventListener('keydown', onKeyDown, true);
+  document.removeEventListener('click', onClick, true);
+  document.removeEventListener('keydown', onKeyDown, true);
+
+  startMusicFromUserGesture();
+}
+
+function onClick() {
+  fireOnce();
+}
+
+function onKeyDown(e) {
+  if (!e) return;
+  if (e.key === 'Enter' || e.key === ' ') fireOnce();
+}
+
   }
 
   // =========================
