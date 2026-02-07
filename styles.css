@@ -83,7 +83,6 @@ html, body{
   place-items: center;
 }
 
-/* Кнопки */
 .btn{
   border: 1px solid var(--btn-border);
   background: var(--btn-bg);
@@ -104,7 +103,27 @@ html, body{
   outline-offset: 3px;
 }
 
-/* Заготовка под модалку/тосты (в Стадии 5+ будет наполнено) */
+/* LOADING */
+.loadingWrap{
+  display: grid;
+  gap: 14px;
+  place-items: center;
+}
+
+.loadingHeart{
+  width: 220px;
+  height: auto;
+  filter: drop-shadow(0 18px 40px rgba(255, 40, 90, 0.25));
+}
+
+.loadingPercent{
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  opacity: 0.92;
+  user-select: none;
+}
+
+/* Заготовка под модалки (будет дальше) */
 .overlay{
   position: absolute;
   inset: 0;
