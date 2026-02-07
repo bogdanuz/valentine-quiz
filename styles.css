@@ -609,28 +609,28 @@ html, body{
 /* ===== FINAL ===== */
 
 .finalWrap{
-  position: absolute;
+  position: fixed;
   inset: 0;
+  overflow: hidden;
 }
 
 .finalVideoFrame{
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
 }
 
 .finalVideo{
   width: 100%;
   height: 100%;
-  object-fit: contain; /* видео не обрезаем */
-  background: rgba(0,0,0,0.22);
+  object-fit: cover;
 }
 
 .finalCanvas{
   position: absolute;
   inset: 0;
-  z-index: 2; /* поверх видео */
+  width: 100%;
+  height: 100%;
+  display: block; /* важно, чтобы не было лишних baseline-отступов */
 }
 
 .finalHud{
