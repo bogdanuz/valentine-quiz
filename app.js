@@ -27,15 +27,21 @@
     NO: 'НЕТ'
   };
 
-  var ASSETS = {
+    var ASSETS = {
     audioMusic: 'assets/audio/music.mp3',
+
     imgEdward: 'assets/img/quiz/edward.png',
     imgTwilightFrame: 'assets/img/quiz/twilight-frame.webp',
     imgDogQ3: 'assets/img/quiz/millionaire-dog.jpg',
     imgRetroQ1: 'assets/img/quiz/retro.jpg',
-    imgKupidonQ4: 'assets/img/quiz/kupidon.jpg'
+    imgKupidonQ4: 'assets/img/quiz/kupidon.jpg',
+
+    // FINAL
     videoMp4: 'assets/video/valentine.mp4',
-    videoWebm: 'assets/video/valentine.webm'
+    videoWebm: 'assets/video/valentine.webm',
+
+    // FX
+    imgHeartBall: 'assets/img/fx/heart-ball.png'
   };
 
   var QUIZ = [
