@@ -290,14 +290,13 @@ html, body{
   50%{ opacity: 1; transform: translateY(-1px); }
 }
 
-.quizAnswersArea{
-  width: min(980px, 100%);
-  display: grid;
+.quizAnswersGrid{
   justify-items: center;
-  padding-bottom: 0px; /* было больше */
-  margin-top: 2px;
 }
 
+.answerBtn.btn--wide{
+  justify-self: center;
+}
 
 .quizAnswersGrid{
   width: 100%;
@@ -335,11 +334,10 @@ html, body{
 
 /* Q5 plaque */
 .colorPlaque{
-  width: min(680px, 100%);      /* как у .quizImage */
+  width: min(420px, 100%);
   display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 16px;
-  align-items: center;
+  justify-items: center;
+  gap: 12px;
   padding: 18px 18px;
   border-radius: 22px;
   background: rgba(255,255,255,0.06);
@@ -347,9 +345,9 @@ html, body{
 }
 
 .colorSwatch{
-  width: 160px;
-  height: 110px;
-  border-radius: 18px;
+  width: min(300px, 100%);
+  aspect-ratio: 1 / 1;
+  border-radius: 22px;
   border: 1px solid rgba(0,0,0,0.22);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
 }
@@ -357,6 +355,7 @@ html, body{
 .colorLabel{
   font-size: 18px;
   opacity: 0.92;
+  text-align: center;
 }
 
 /* Overlay & modal */
