@@ -1241,141 +1241,164 @@ function triggerEasterFromFinal(ball) {
   }
 
   function finalSpawnBalls(count) {
-    if (!runtime.final) return;
+  if (!runtime.final) return;
 
-    var canvas = runtime.final.canvasEl;
-    var rect = canvas.getBoundingClientRect();
-    var w = rect.width;
-    var h = rect.height;
+  var canvas = runtime.final.canvasEl;
+  var rect = canvas.getBoundingClientRect();
+  var w = rect.width;
+  var h = rect.height;
 
-    // Огромные шары под размер экрана (на ТВ/большом мониторе будут ещё больше)
-var baseR = Math.min(w, h) * 0.16;
-if (!isFinite(baseR)) baseR = 120;
-baseR = clamp(baseR, 70, 260);
+  // Огромные шары под размер экрана (на ТВ/большом мониторе будут ещё больше)
+  var baseR = Math.min(w, h) * 0.16;
+  if (!isFinite(baseR)) baseR = 120;
+  baseR = clamp(baseR, 70, 260);
 
-    var balls = [];
-    for (var i = 0; i < count; i++) {
-      var rr = baseR * (0.85 + Math.random() * 0.45);
+  var balls = [];
+  for (var i = 0; i < count; i++) {
+    var rr = baseR * (0.85 + Math.random() * 0.45);
 
-      balls.push({
-        id: i + 1,
-        r: rr,
-        x: Math.random() * w,
-        y: -Math.random() * (h * 0.9) - rr - 10,
-        vx: (Math.random() * 2 - 1) * 90,
-        vy: Math.random() * 20,
-        hue: Math.floor(Math.random() * 360)
-      });
-    }
+    balls.push({
+      id: i + 1,
+      r: rr,
+      x: Math.random() * w,
+      y: -Math.random() * (h * 0.9) - rr - 10,
 
-    runtime.final.balls = balls;
+      // было "комариное" движение — делаем лёгкий дрейф + нулевой старт вниз
+      vx: (Math.random() * 2 - 1) * 18,
+      vy: 0,
+
+      hue: Math.floor(Math.random() * 360)
+    });
   }
 
-  function finalUpdateBalls(dt) {
-    if (!runtime.final) return;
+  runtime.final.balls = balls;
+}
 
-    // fade-out (растворение шаров)
-    if (runtime.final.fadeMode === 1) {
-      runtime.final.ballsFade01 -= dt / 0.35;
-      if (runtime.final.ballsFade01 <= 0) {
-        runtime.final.ballsFade01 = 0;
-        runtime.final.fadeMode = 0;
-        runtime.final.balls = [];
+function finalUpdateBalls(dt) {
+  if (!runtime.final) return;
+
+  // fade-out (растворение шаров)
+  if (runtime.final.fadeMode === 1) {
+    runtime.final.ballsFade01 -= dt / 0.35;
+    if (runtime.final.ballsFade01 <= 0) {
+      runtime.final.ballsFade01 = 0;
+      runtime.final.fadeMode = 0;
+      runtime.final.balls = [];
+    }
+  } else {
+    runtime.final.ballsFade01 = 1;
+  }
+
+  var balls = runtime.final.balls;
+  if (!balls || balls.length === 0) return;
+
+  var canvas = runtime.final.canvasEl;
+  var rect = canvas.getBoundingClientRect();
+  var w = rect.width;
+  var h = rect.height;
+
+  // "Воздушные" настройки: мягче вниз, сильнее демпфирование, слабый отскок
+  var g = 1350;
+  var air = 0.985;
+  var bounce = 0.28;
+  var groundFriction = 0.96;
+
+  // ограничение скорости, чтобы не разгонялись до "урагана"
+  var maxV = 1600;
+
+  // substeps для стабильности (чуть чаще, меньше дрожания)
+  var steps = Math.max(1, Math.ceil(dt / 0.012));
+  var subDt = dt / steps;
+
+  for (var s = 0; s < steps; s++) {
+    // integrate
+    for (var i = 0; i < balls.length; i++) {
+      var b = balls[i];
+
+      b.vy += g * subDt;
+
+      // демпфирование
+      b.vx *= air;
+      b.vy *= air;
+
+      // ограничим скорости
+      if (b.vx > maxV) b.vx = maxV;
+      if (b.vx < -maxV) b.vx = -maxV;
+      if (b.vy > maxV) b.vy = maxV;
+      if (b.vy < -maxV) b.vy = -maxV;
+
+      b.x += b.vx * subDt;
+      b.y += b.vy * subDt;
+
+      // walls
+      if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx) * bounce; }
+      if (b.x + b.r > w) { b.x = w - b.r; b.vx = -Math.abs(b.vx) * bounce; }
+
+      // floor / ceiling
+      if (b.y + b.r > h) {
+        b.y = h - b.r;
+        b.vy = -Math.abs(b.vy) * bounce;
+        b.vx *= groundFriction;
+
+        // "успокоение" у пола, чтобы не дрожали бесконечно
+        if (Math.abs(b.vy) < 70) b.vy = 0;
+        if (Math.abs(b.vx) < 18) b.vx = 0;
       }
-    } else {
-      runtime.final.ballsFade01 = 1;
+      if (b.y - b.r < 0) {
+        b.y = b.r;
+        b.vy = Math.abs(b.vy) * bounce;
+      }
     }
 
-    var balls = runtime.final.balls;
-    if (!balls || balls.length === 0) return;
+    // collisions O(n^2)
+    for (var a = 0; a < balls.length; a++) {
+      for (var c = a + 1; c < balls.length; c++) {
+        var A = balls[a];
+        var B = balls[c];
 
-    var canvas = runtime.final.canvasEl;
-    var rect = canvas.getBoundingClientRect();
-    var w = rect.width;
-    var h = rect.height;
+        var dx = B.x - A.x;
+        var dy = B.y - A.y;
+        var dist2 = dx*dx + dy*dy;
+        var minD = A.r + B.r;
 
-    var g = 3800;          // сильнее гравитация
-    var air = 0.9965;      // меньше затухание в воздухе
-    var bounce = 0.72;     // более “упруго”
-    var groundFriction = 0.992; // меньше торможение по полу
+        if (dist2 <= 0 || dist2 >= minD*minD) continue;
 
-    // substeps для стабильности
-    var steps = Math.max(1, Math.ceil(dt / 0.016));
-    var subDt = dt / steps;
+        var dist = Math.sqrt(dist2) || 0.0001;
+        var nx = dx / dist;
+        var ny = dy / dist;
 
-    for (var s = 0; s < steps; s++) {
-      // integrate
-      for (var i = 0; i < balls.length; i++) {
-        var b = balls[i];
+        // раздвигаем сильнее (меньше "дрожания" от застреваний)
+        var overlap = (minD - dist);
+        var push = overlap * 0.78;
+        A.x -= nx * push;
+        A.y -= ny * push;
+        B.x += nx * push;
+        B.y += ny * push;
 
-        b.vy += g * subDt;
+        // мягкий импульс
+        var rvx = B.vx - A.vx;
+        var rvy = B.vy - A.vy;
+        var velAlong = rvx * nx + rvy * ny;
+        if (velAlong > 0) continue;
 
-        b.vx *= air;
-        b.vy *= air;
+        var restitution = 0.18;
+        var j = -(1.0 + restitution) * velAlong;
+        j *= 0.38;
 
-        b.x += b.vx * subDt;
-        b.y += b.vy * subDt;
+        A.vx -= j * nx;
+        A.vy -= j * ny;
+        B.vx += j * nx;
+        B.vy += j * ny;
 
-        // walls
-        if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx) * bounce; }
-        if (b.x + b.r > w) { b.x = w - b.r; b.vx = -Math.abs(b.vx) * bounce; }
-
-        // floor / ceiling
-        if (b.y + b.r > h) {
-          b.y = h - b.r;
-          b.vy = -Math.abs(b.vy) * bounce;
-          b.vx *= groundFriction;
-        }
-        if (b.y - b.r < 0) {
-          b.y = b.r;
-          b.vy = Math.abs(b.vy) * bounce;
-        }
-      }
-
-      // collisions O(n^2) (50 шаров норм)
-      for (var a = 0; a < balls.length; a++) {
-        for (var c = a + 1; c < balls.length; c++) {
-          var A = balls[a];
-          var B = balls[c];
-
-          var dx = B.x - A.x;
-          var dy = B.y - A.y;
-          var dist2 = dx*dx + dy*dy;
-          var minD = A.r + B.r;
-
-          if (dist2 <= 0 || dist2 >= minD*minD) continue;
-
-          var dist = Math.sqrt(dist2) || 0.0001;
-          var nx = dx / dist;
-          var ny = dy / dist;
-
-          // раздвигаем
-          var overlap = (minD - dist);
-          var push = overlap * 0.52;
-          A.x -= nx * push;
-          A.y -= ny * push;
-          B.x += nx * push;
-          B.y += ny * push;
-
-          // импульс (упруго)
-          var rvx = B.vx - A.vx;
-          var rvy = B.vy - A.vy;
-          var velAlong = rvx * nx + rvy * ny;
-          if (velAlong > 0) continue;
-
-          var j = -(1.0 + 0.72) * velAlong;
-          j *= 0.5;
-
-          A.vx -= j * nx;
-          A.vy -= j * ny;
-          B.vx += j * nx;
-          B.vy += j * ny;
-        }
+        // доп. демпфирование после столкновения
+        A.vx *= 0.94; A.vy *= 0.94;
+        B.vx *= 0.94; B.vy *= 0.94;
       }
     }
   }
+}
 
-  function finalDraw() {
+function finalDraw() {
   if (!runtime.final) return;
 
   var ctx = runtime.final.ctx;
@@ -1404,7 +1427,6 @@ baseR = clamp(baseR, 70, 260);
     if (imgReady && img) {
       ctx.drawImage(img, b.x - b.r, b.y - b.r, b.r * 2, b.r * 2);
     } else {
-      // fallback: круг, если PNG не загрузился
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
       ctx.fillStyle = 'hsla(' + b.hue + ', 85%, 62%, 0.72)';
@@ -1414,7 +1436,7 @@ baseR = clamp(baseR, 70, 260);
     ctx.globalAlpha = 1;
   }
 }
-  
+
   // ===== Q3 timer =====
 
   function startQ3TimerIfNeeded() {
