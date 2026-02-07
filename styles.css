@@ -141,7 +141,7 @@ html, body{
   position: absolute;
   inset: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain; /* чтобы скролл не “цеплялся” дальше страницы */ /* [web:144] */
   -webkit-overflow-scrolling: touch;
   padding: 0;
 }
@@ -150,11 +150,16 @@ html, body{
 .prologueScroll{ scrollbar-width: none; }
 .prologueScroll::-webkit-scrollbar{ width: 0; height: 0; }
 
+/* Важно: делаем верхний “пустой” блок больше высоты вьюпорта контейнера,
+   чтобы приветствие НЕ было видно/обрезано на первом кадре. */
 .prologueSpacerTop{
-  height: 520px;
+  height: calc(100% + 40px);
 }
 
+/* Сам блок приветствия делаем высотой экрана контейнера:
+   когда пользователь доскроллит — карточка окажется по центру. */
 .prologueGreetingSection{
+  min-height: 100%;
   display: grid;
   place-items: center;
   padding: 0 10px;
@@ -174,13 +179,14 @@ html, body{
 }
 
 .prologueSpacerMid{
-  height: 520px;
+  height: calc(100% + 40px);
 }
 
 .quizAnchor{
   height: 1px;
 }
 
+/* Заглушка квиза (экран quiz) */
 .quizPlaceholder{
   width: min(1000px, 100%);
   height: 420px;
