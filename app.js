@@ -865,11 +865,7 @@ keepNoInCentralBounds();
   runtime.climax.onResize = null;
 }
 
-    noBtn.style.left = Math.round(left) + 'px';
-    noBtn.style.top = Math.round(top) + 'px';
-  }
-
-  function moveNoButton(isFirstNudge) {
+function moveNoButton(isFirstNudge) {
   var arena = runtime.climax.arenaEl;
   var yesBtn = runtime.climax.yesBtn;
   var noBtn = runtime.climax.noBtn;
@@ -882,7 +878,6 @@ keepNoInCentralBounds();
   var curLeft = parseFloat(noBtn.style.left);
   var curTop  = parseFloat(noBtn.style.top);
 
-  // если вдруг не инициализировано — ставим рядом и потом двигаем
   if (!isFinite(curLeft) || !isFinite(curTop)) {
     setInitialClimaxPositions();
     curLeft = parseFloat(noBtn.style.left);
@@ -902,7 +897,6 @@ keepNoInCentralBounds();
   dx /= len;
   dy /= len;
 
-  // маленький шаг, чтобы всегда было видно
   var step = (isFirstNudge === true) ? 40 : 55;
   var jitter = (isFirstNudge === true) ? 10 : 14;
 
