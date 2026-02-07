@@ -517,10 +517,9 @@ html, body{
 }
 
 .climaxControls{
-  position: relative;
-  z-index: 1; /* поверх sparkle */
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 .climaxYes{
@@ -542,6 +541,7 @@ html, body{
 
 .climaxNo:active{
   transform: scale(0.98);
+  z-index: 2;
 }
 
 /* ===== FINAL (заглушка) ===== */
