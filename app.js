@@ -866,28 +866,46 @@ function moveNoButton(isFirstNudge) {
     curTop  = parseFloat(noBtn.style.top);
   }
 
+  // Центр "ДА" в координатах арены
   var yesCx = (y.left - a.left) + y.width / 2;
   var yesCy = (y.top  - a.top) + y.height / 2;
 
+  // Центр "НЕТ" в координатах арены (из curLeft/curTop)
   var noCx = curLeft + n.width / 2;
   var noCy = curTop  + n.height / 2;
 
+  // Базовый вектор "от ДА"
   var dx = noCx - yesCx;
   var dy = noCy - yesCy;
   var len = Math.sqrt(dx*dx + dy*dy) || 1;
-
   dx /= len;
   dy /= len;
 
-  var step = (isFirstNudge === true) ? 40 : 55;
-  var jitter = (isFirstNudge === true) ? 10 : 14;
+  // Перпендикуляр (для "орбиты" влево/вправо)
+  var px = -dy;
+  var py = dx;
+  var orbitSign = (Math.random() < 0.5) ? -1 : 1;
 
+  // Скорость/разброс (первый толчок мягче)
+  var step = (isFirstNudge === true) ? 70 : 120;      // было 40/55
+  var orbit = (isFirstNudge === true) ? 35 : 80;      // движение "вбок" вокруг ДА
+  var jitter = (isFirstNudge === true) ? 10 : 22;
+
+  // Случайная добавка (чтобы не было одинаковых траекторий)
   var jx = (Math.random() * 2 - 1) * jitter;
   var jy = (Math.random() * 2 - 1) * jitter;
 
-  var nextLeft = curLeft + dx * step + jx;
-  var nextTop  = curTop  + dy * step + jy;
+  // Иногда делаем "рывок" сильнее (редко, чтобы было весело)
+  if (isFirstNudge !== true && Math.random() < 0.22) {
+    step *= 1.35;
+    orbit *= 1.25;
+  }
 
+  // Итоговое смещение: отталкивание + орбита + шум
+  var nextLeft = curLeft + dx * step + px * orbit * orbitSign + jx;
+  var nextTop  = curTop  + dy * step + py * orbit * orbitSign + jy;
+
+  // Держим в центральной зоне 20–80%
   nextLeft = clampCentralX(a.width, n.width, nextLeft);
   nextTop  = clampCentralY(a.height, n.height, nextTop);
 
