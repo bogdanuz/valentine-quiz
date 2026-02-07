@@ -259,112 +259,122 @@
   renderScreen();
 }
 
-    if (state.screenId === 'prologue') setupPrologueRuntime();
-    if (state.screenId === 'quiz') startQ3TimerIfNeeded();
-    if (state.screenId === 'climax') setupClimaxRuntime();
-    if (state.screenId === 'final') setupFinalRuntime();
+  function renderScreen() {
+  var safeRoot = document.getElementById('safeRoot');
+  if (!safeRoot) return;
+
+  // НЕ очищаем safeRoot сразу — оставляем прошлый экран на 1 кадр
+  var prev = safeRoot.querySelector('.screen');
+
+  var screenEl = document.createElement('div');
+  screenEl.className = 'screen';
+  screenEl.setAttribute('data-screen', state.screenId);
+
+  function mount(onActivated) {
+    safeRoot.appendChild(screenEl);
+
+    requestAnimationFrame(function () {
+      screenEl.classList.add('screen--active');
+
+      if (prev && prev !== screenEl) {
+        prev.classList.remove('screen--active');
+        prev.classList.add('screen--out');
+
+        var cleaned = false;
+        function cleanup() {
+          if (cleaned) return;
+          cleaned = true;
+          if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+        }
+
+        prev.addEventListener('transitionend', cleanup, { once: true });
+        setTimeout(cleanup, 500);
+      }
+
+      if (typeof onActivated === 'function') onActivated();
+    });
   }
 
-  function renderScreen() {
-    var safeRoot = document.getElementById('safeRoot');
-    if (!safeRoot) return;
+  if (state.screenId === 'loading') {
+    screenEl.appendChild(renderLoading());
+    mount();
 
-    safeRoot.innerHTML = '';
-
-    var screenEl = document.createElement('div');
-    screenEl.className = 'screen';
-    screenEl.setAttribute('data-screen', state.screenId);
-
-    if (state.screenId === 'loading') {
-      screenEl.appendChild(renderLoading());
-      safeRoot.appendChild(screenEl);
-      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
-
-      if (!runtime.preloadStarted) {
-        runtime.preloadStarted = true;
-        startLoadingLoop();
-        preloadAssets(function (p01) { runtime.target01 = clamp01(p01); })
-          .then(function () { runtime.preloadDone = true; runtime.target01 = 1; })
-          .catch(function (e) { console.error('Preload failed:', e); /* soft preload обычно сюда не попадает */ });
-      }
-      return;
+    if (!runtime.preloadStarted) {
+      runtime.preloadStarted = true;
+      startLoadingLoop();
+      preloadAssets(function (p01) { runtime.target01 = clamp01(p01); })
+        .then(function () { runtime.preloadDone = true; runtime.target01 = 1; })
+        .catch(function (e) { console.error('Preload failed:', e); });
     }
+    return;
+  }
 
-    if (state.screenId === 'start') {
-      var bg0 = document.getElementById('stageBg');
-      if (bg0) bg0.style.transform = '';
+  if (state.screenId === 'start') {
+    var bg0 = document.getElementById('stageBg');
+    if (bg0) bg0.style.transform = '';
 
-      var wrap = document.createElement('div');
-      wrap.className = 'centerStack';
+    var wrap = document.createElement('div');
+    wrap.className = 'centerStack';
 
-      var btn = document.createElement('button');
-      btn.className = 'btn';
-      btn.type = 'button';
-      btn.id = 'startBtn';
-      btn.textContent = UI.START_BTN;
+    var btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.type = 'button';
+    btn.id = 'startBtn';
+    btn.textContent = UI.START_BTN;
 
-      btn.addEventListener('click', function () {
-        startMusicFromUserGesture();
-        zoomBackgroundIn();
-        goToScreen('prologue');
-      });
+    btn.addEventListener('click', function () {
+      startMusicFromUserGesture();
+      zoomBackgroundIn();
+      goToScreen('prologue');
+    });
 
-      wrap.appendChild(btn);
-      screenEl.appendChild(wrap);
+    wrap.appendChild(btn);
+    screenEl.appendChild(wrap);
 
-      safeRoot.appendChild(screenEl);
-      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
+    mount();
+    stopLoadingLoop();
+    return;
+  }
 
-      stopLoadingLoop();
-      return;
-    }
-
-    if (state.screenId === 'prologue') {
-      screenEl.appendChild(renderPrologue());
-      safeRoot.appendChild(screenEl);
-      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
+  if (state.screenId === 'prologue') {
+    screenEl.appendChild(renderPrologue());
+    mount(function () {
       stopLoadingLoop();
       setupPrologueRuntime();
-      return;
-    }
+    });
+    return;
+  }
 
-    if (state.screenId === 'quiz') {
-      screenEl.appendChild(renderQuiz());
-      safeRoot.appendChild(screenEl);
-      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
+  if (state.screenId === 'quiz') {
+    screenEl.appendChild(renderQuiz());
+    mount(function () {
       stopLoadingLoop();
       startQ3TimerIfNeeded();
-      return;
-    }
-
-    if (state.screenId === 'climax') {
-      screenEl.appendChild(renderClimax());
-      safeRoot.appendChild(screenEl);
-      requestAnimationFrame(function () {
-        screenEl.classList.add('screen--active');
-        setupClimaxRuntime();
-      });
-      stopLoadingLoop();
-      return;
-    }
-
-        if (state.screenId === 'final') {
-      screenEl.appendChild(renderFinal());
-      safeRoot.appendChild(screenEl);
-
-      requestAnimationFrame(function () {
-        screenEl.classList.add('screen--active');
-        setupFinalRuntime();
-      });
-
-      stopLoadingLoop();
-      return;
-    }
-
-    safeRoot.appendChild(screenEl);
-    requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
-    stopLoadingLoop();
+    });
+    return;
   }
+
+  if (state.screenId === 'climax') {
+    screenEl.appendChild(renderClimax());
+    mount(function () {
+      stopLoadingLoop();
+      setupClimaxRuntime();
+    });
+    return;
+  }
+
+  if (state.screenId === 'final') {
+    screenEl.appendChild(renderFinal());
+    mount(function () {
+      stopLoadingLoop();
+      setupFinalRuntime();
+    });
+    return;
+  }
+
+  mount();
+  stopLoadingLoop();
+}
 
   function zoomBackgroundIn() {
     var bg = document.getElementById('stageBg');
