@@ -817,3 +817,9 @@ html, body{
   transform: translateX(-50%) translateY(0);
 }
 
+@keyframes prologueBounce{
+  0%, 100%{ transform: translateX(-50%) translateY(0); opacity: 0.65; }
+  50%{ transform: translateX(-50%) translateY(10px); opacity: 0.9; }
+}
+
+
