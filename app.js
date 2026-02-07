@@ -29,8 +29,8 @@
     imgEdward: 'assets/img/quiz/edward.png',
     imgTwilightFrame: 'assets/img/quiz/twilight-frame.webp',
     imgDogQ3: 'assets/img/quiz/millionaire-dog.jpg',
-    imgRetroQ1: 'assets/img/quiz/retro.jpeg',
-    imgKupidonQ4: 'assets/img/quiz/kupidon.jpeg'
+    imgRetroQ1: 'assets/img/quiz/retro.jpg',
+    imgKupidonQ4: 'assets/img/quiz/kupidon.jpg'
   };
 
   var QUIZ = [
@@ -735,23 +735,36 @@
   }
 
   function preloadAssets(onProgress01) {
-    var urls = [
-      ASSETS.audioMusic,
-      ASSETS.imgEdward,
-      ASSETS.imgTwilightFrame,
-      ASSETS.imgDogQ3,
-      ASSETS.imgRetroQ1,
-      ASSETS.imgKupidonQ4
-    ];
+  var urls = [
+    ASSETS.audioMusic,
+    ASSETS.imgEdward,
+    ASSETS.imgTwilightFrame,
+    ASSETS.imgDogQ3,
+    ASSETS.imgRetroQ1,
+    ASSETS.imgKupidonQ4
+  ];
 
-    var done = 0;
-
-    return Promise.all(urls.map(function (url) {
-      return fetch(url, { cache: 'force-cache' })
-        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
-        .then(function () { done++; onProgress01(done / urls.length); });
-    })).then(function () { onProgress01(1); });
+  var done = 0;
+  function markDone() {
+    done++;
+    onProgress01(done / urls.length);
   }
+
+  return Promise.all(urls.map(function (url) {
+    return fetch(url, { cache: 'force-cache' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.blob();
+      })
+      .catch(function (e) {
+        // Важно: НЕ блокируем приложение из-за 404
+        console.warn('Preload skipped:', url, e);
+      })
+      .then(markDone);
+  })).then(function () {
+    onProgress01(1);
+  });
+}
 
   function startLoadingLoop() {
     if (runtime.rafId) return;
