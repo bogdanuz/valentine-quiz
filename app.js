@@ -1018,8 +1018,7 @@ function moveNoButton(isFirstNudge) {
     return wrap;
   }
 
-  // runtime.final добавим “на лету”, чтобы не трогать твой текущий runtime-объект сверху
-  function setupFinalRuntime() {
+function setupFinalRuntime() {
   teardownFinalRuntime();
 
   var video = document.getElementById('finalVideo');
@@ -1117,59 +1116,6 @@ function moveNoButton(isFirstNudge) {
   if (replayBtn) replayBtn.addEventListener('click', finalRestartSequence);
   if (clearBtn) clearBtn.addEventListener('click', finalToggleBalls);
 
-  video.muted = true;
-  video.loop = true;
-  video.play().catch(function(){});
-
-  finalResizeCanvas();
-
-  runtime.final.lastMs = performance.now();
-  runtime.final.lastVideoT = 0;
-
-  runtime.final.raf = requestAnimationFrame(finalTick);
-}
-  
-  runtime.final.ctx = canvas.getContext('2d');
-
-  // PNG шар
-  runtime.final.ballImg = new Image();
-  runtime.final.ballImg.onload = function () {
-    if (runtime.final) runtime.final.ballImgReady = true;
-  };
-  runtime.final.ballImg.onerror = function () {
-    if (runtime.final) runtime.final.ballImgReady = false;
-  };
-  runtime.final.ballImg.src = ASSETS.imgHeartBall;
-
-  // клики по шарам (задел под Стадию 9)
-  runtime.final.onPointerDown = function (ev) {
-    if (!runtime.final) return;
-    var rect = canvas.getBoundingClientRect();
-    var x = ev.clientX - rect.left;
-    var y = ev.clientY - rect.top;
-
-    var hit = finalHitBall(x, y);
-    if (!hit) return;
-
-    var now = performance.now();
-    if (now - runtime.final.tripleLastMs <= 650) runtime.final.tripleCount++;
-    else runtime.final.tripleCount = 1;
-    runtime.final.tripleLastMs = now;
-
-    if (runtime.final.tripleCount >= 3) {
-      runtime.final.tripleCount = 0;
-      triggerEasterFromFinal(hit);
-    }
-  };
-  canvas.addEventListener('pointerdown', runtime.final.onPointerDown);
-
-  runtime.final.onResize = function () { finalResizeCanvas(); };
-  window.addEventListener('resize', runtime.final.onResize);
-
-  if (replayBtn) replayBtn.addEventListener('click', finalRestartSequence);
-  if (clearBtn) clearBtn.addEventListener('click', finalFadeOutBalls);
-
-  // autoplay: play() возвращает Promise и может быть отклонён, поэтому catch обязателен [web:17]
   video.muted = true;
   video.loop = true;
   video.play().catch(function(){});
