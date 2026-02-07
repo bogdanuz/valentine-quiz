@@ -17,7 +17,8 @@
   --card: rgba(255,255,255,0.10);
   --card-border: rgba(255,255,255,0.16);
 
-  --t-base: 280ms; /* базовые переходы 250–300ms по ТЗ */
+  --t-base: 280ms;     /* базовые переходы 250–300ms по ТЗ */
+  --t-zoom: 400ms;     /* START → ПРОЛОГ: лёгкий zoom-in фона ~400ms */
 }
 
 *{ box-sizing: border-box; }
@@ -49,9 +50,27 @@ html, body{
   position: relative;
   border-radius: 18px;
   overflow: hidden;
-  background:
-    radial-gradient(900px 600px at 50% 30%, rgba(255,255,255,0.06), transparent 60%);
+  background: transparent;
   box-shadow: 0 20px 80px rgba(0,0,0,0.35);
+}
+
+/* Фон отдельным слоем, чтобы делать zoom */
+.stageBg{
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(900px 600px at 50% 30%, rgba(255,255,255,0.06), transparent 60%),
+    radial-gradient(1200px 800px at 30% 20%, rgba(255,80,140,0.16), transparent 55%),
+    radial-gradient(900px 700px at 70% 60%, rgba(90,140,255,0.14), transparent 60%),
+    linear-gradient(160deg, rgba(12,16,35,1), rgba(25,30,60,1));
+  transform: scale(1);
+  transform-origin: 50% 50%;
+  transition: transform var(--t-zoom) ease;
+  will-change: transform;
+}
+
+.stageBg.stageBg--zoomIn{
+  transform: scale(1.045);
 }
 
 .safe{
