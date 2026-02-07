@@ -1475,6 +1475,23 @@ function triggerEasterFromFinal(ball) {
   ASSETS.imgKupidonQ4,
   ASSETS.imgHeartBall
 ];
+      // Мягкий прогрев видео для финала (чтобы появлялось быстрее)
+  // fetch(..., { cache: 'force-cache' }) старается взять/обновить HTTP-кэш. [web:531]
+  (function preloadFinalVideoSoft() {
+    var v = document.createElement('video');
+    var url = ASSETS.videoMp4;
+
+    try {
+      if (v && v.canPlayType) {
+        var canWebm = v.canPlayType('video/webm');
+        if (canWebm && canWebm !== 'no' && ASSETS.videoWebm) url = ASSETS.videoWebm;
+      }
+    } catch (e) {}
+
+    fetch(url, { cache: 'force-cache' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .catch(function () {});
+  })();
 
     var done = 0;
     function markDone() {
