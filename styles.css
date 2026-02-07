@@ -75,6 +75,11 @@ html, body{
   transform: scale(0.985);
   opacity: 0;
   transition: transform var(--t-base) ease, opacity var(--t-base) ease;
+  will-change: opacity, transform;
+}
+
+.screen.screen--out{
+  transform: scale(0.99);
 }
 
 .screen.screen--active{
