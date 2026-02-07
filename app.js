@@ -707,6 +707,8 @@
     var arena = document.getElementById('climaxArena');
     var yesBtn = document.getElementById('yesBtn');
     var noBtn = document.getElementById('noBtn');
+    runtime.climax.firstNudgeDone = false;
+setInitialClimaxPositions();
     if (!arena || !yesBtn || !noBtn) return;
 
     runtime.climax.arenaEl = arena;
@@ -717,6 +719,46 @@
     yesBtn.addEventListener('click', function () {
       goToScreen('final');
     });
+
+    function setInitialClimaxPositions() {
+  var arena = runtime.climax.arenaEl;
+  var yesBtn = runtime.climax.yesBtn;
+  var noBtn = runtime.climax.noBtn;
+  if (!arena || !yesBtn || !noBtn) return;
+
+  var a = arena.getBoundingClientRect();
+  var yesR = yesBtn.getBoundingClientRect();
+  var noR = noBtn.getBoundingClientRect();
+
+  // ставим рядом по центру
+  var gap = 18;
+  var totalW = yesR.width + gap + noR.width;
+
+  var y = Math.round(a.height * 0.54);
+
+  var startLeft = Math.round((a.width - totalW) / 2);
+  var yesLeft = startLeft;
+  var noLeft = startLeft + yesR.width + gap;
+
+  // ограничим сразу в пределах центральной зоны (20–80%)
+  yesBtn.style.left = Math.round(clampCentralX(a.width, yesR.width, yesLeft)) + 'px';
+  yesBtn.style.top  = Math.round(clampCentralY(a.height, yesR.height, y - Math.round(yesR.height / 2))) + 'px';
+
+  noBtn.style.left = Math.round(clampCentralX(a.width, noR.width, noLeft)) + 'px';
+  noBtn.style.top  = Math.round(clampCentralY(a.height, noR.height, y - Math.round(noR.height / 2))) + 'px';
+}
+
+    function clampCentralX(arenaW, btnW, x) {
+  var min = (arenaW - btnW) * 0.20;
+  var max = (arenaW - btnW) * 0.80;
+  return clamp(x, min, max);
+}
+
+function clampCentralY(arenaH, btnH, y) {
+  var min = (arenaH - btnH) * 0.20;
+  var max = (arenaH - btnH) * 0.80;
+  return clamp(y, min, max);
+}
 
     // На десктопе: убегаем при наведении, на таче: pointerdown тоже сработает. [web:288][web:297]
     var run = function (ev) {
@@ -742,8 +784,29 @@ runtime.climax.onArenaMove = onArenaMove;
     noBtn.addEventListener('pointerdown', run);
 
     runtime.climax.onResize = function () {
-      keepNoInBounds();
-    };
+  keepNoInCentralBounds();
+};
+
+    function keepNoInCentralBounds() {
+  var arena = runtime.climax.arenaEl;
+  var noBtn = runtime.climax.noBtn;
+  if (!arena || !noBtn) return;
+
+  var a = arena.getBoundingClientRect();
+  var n = noBtn.getBoundingClientRect();
+
+  var curLeft = parseFloat(noBtn.style.left);
+  var curTop  = parseFloat(noBtn.style.top);
+
+  if (!isFinite(curLeft) || !isFinite(curTop)) {
+    setInitialClimaxPositions();
+    return;
+  }
+
+  noBtn.style.left = Math.round(clampCentralX(a.width, n.width, curLeft)) + 'px';
+  noBtn.style.top  = Math.round(clampCentralY(a.height, n.height, curTop)) + 'px';
+}
+
     window.addEventListener('resize', runtime.climax.onResize);
 
     // Стартовая “аккуратная” позиция внутри арены
@@ -796,62 +859,45 @@ runtime.climax.firstNudgeDone = false;
   var noBtn = runtime.climax.noBtn;
   if (!arena || !yesBtn || !noBtn) return;
 
-  state.climax.noRunCount = (state.climax.noRunCount || 0) + 1;
-  saveState();
-
   var a = arena.getBoundingClientRect();
   var y = yesBtn.getBoundingClientRect();
   var n = noBtn.getBoundingClientRect();
 
-  var pad = 18; // чтобы не липло к краям
-  var maxLeft = Math.max(pad, a.width - n.width - pad);
-  var maxTop  = Math.max(pad, a.height - n.height - pad);
-
-  // текущая позиция кнопки (берём из style)
   var curLeft = parseFloat(noBtn.style.left);
   var curTop  = parseFloat(noBtn.style.top);
 
-  // если ещё не задано — ставим около центра
+  // если вдруг не инициализировано — ставим рядом и потом двигаем
   if (!isFinite(curLeft) || !isFinite(curTop)) {
-    curLeft = (a.width - n.width) * 0.50;
-    curTop  = (a.height - n.height) * 0.58;
+    setInitialClimaxPositions();
+    curLeft = parseFloat(noBtn.style.left);
+    curTop  = parseFloat(noBtn.style.top);
   }
 
-  // центры YES/NO в координатах арены
   var yesCx = (y.left - a.left) + y.width / 2;
   var yesCy = (y.top  - a.top) + y.height / 2;
 
   var noCx = curLeft + n.width / 2;
   var noCy = curTop  + n.height / 2;
 
-  // направление "отталкивания" от YES
   var dx = noCx - yesCx;
   var dy = noCy - yesCy;
-  var len = Math.sqrt(dx*dx + dy*dy);
-
-  if (len < 1) { // вдруг совпали
-    dx = (Math.random() - 0.5);
-    dy = (Math.random() - 0.5);
-    len = Math.sqrt(dx*dx + dy*dy) || 1;
-  }
+  var len = Math.sqrt(dx*dx + dy*dy) || 1;
 
   dx /= len;
   dy /= len;
 
-  // шаг перемещения: первый — маленький, дальше — чуть больше, но не огромный
-  var step = (isFirstNudge === true) ? 70 : 95;
-  var jitter = (isFirstNudge === true) ? 14 : 22;
+  // маленький шаг, чтобы всегда было видно
+  var step = (isFirstNudge === true) ? 40 : 55;
+  var jitter = (isFirstNudge === true) ? 10 : 14;
 
-  // лёгкая “дрожь” чтобы не было идеально прямолинейно
   var jx = (Math.random() * 2 - 1) * jitter;
   var jy = (Math.random() * 2 - 1) * jitter;
 
   var nextLeft = curLeft + dx * step + jx;
   var nextTop  = curTop  + dy * step + jy;
 
-  // ограничиваем внутри арены
-  nextLeft = clamp(nextLeft, pad, maxLeft);
-  nextTop  = clamp(nextTop,  pad, maxTop);
+  nextLeft = clampCentralX(a.width, n.width, nextLeft);
+  nextTop  = clampCentralY(a.height, n.height, nextTop);
 
   noBtn.style.left = Math.round(nextLeft) + 'px';
   noBtn.style.top  = Math.round(nextTop) + 'px';
