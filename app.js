@@ -4,7 +4,6 @@
   var STORAGE_KEY = 'valentine_state_v1';
   var APP_VERSION = 'v1';
 
-  // Зафиксированные тексты (НЕ МЕНЯТЬ)
   var FIXED = {
     PROLOGUE: 'Добро пожаловать, Анастасия, в самый валентиновый из всех святых и самый святой из всех валентиновых квизов совместимости.',
     CLIMAX_Q: 'Будете ли Вы моей Валентинкой?',
@@ -22,37 +21,27 @@
 
     CORRECT_TITLE: 'ВЕРНО!',
     NEXT_Q_BTN: 'Следующий вопрос',
-    OK_BTN: 'Окей'
     GO_FURTHER: 'Идти дальше'
-
   };
 
   var ASSETS = {
     audioMusic: 'assets/audio/music.mp3',
-    videoMp4: 'assets/video/valentine.mp4',
-    videoWebm: 'assets/video/valentine.webm',
-
     imgEdward: 'assets/img/quiz/edward.png',
     imgTwilightFrame: 'assets/img/quiz/twilight-frame.webp',
     imgDogQ3: 'assets/img/quiz/millionaire-dog.jpg',
-    imgRetroQ1: 'assets/img/quiz/retro.jpg',
-    imgKupidonQ4: 'assets/img/quiz/kupidon.jpg',
-    imgNerpaHead: 'assets/img/easter/nerpa-dog-head.png',
-    imgHeartBall: 'assets/img/fx/heart-ball.png'
-  };
-
-  var T = {
-    MEM_TEXT_MS: 700
+    imgRetroQ1: 'assets/img/quiz/retro.jpeg',
+    imgKupidonQ4: 'assets/img/quiz/kupidon.jpeg'
   };
 
   var QUIZ = [
     {
       id: 1,
-      text: 'Юбилейный уровень: это наше 10‑е 14 февраля вместе. Сколько дней прошло с нашего первого?',
+      text: 'Юбилейный уровень: 10‑е 14 февраля вместе. Сколько дней прошло с нашего первого?',
       answers: ['3640', '3654', '3670', '3699'],
       correctIndex: 1,
       repeatOnWrong: true,
-      compliment: 'Я устал считать, сколько мы вместе, но никогда не устану выбирать тебя каждый день'
+      compliment: 'Я устал считать, сколько мы вместе, но никогда не устану выбирать тебя каждый день',
+      img: 'imgRetroQ1'
     },
     {
       id: 2,
@@ -61,7 +50,7 @@
       correctIndex: 2,
       repeatOnWrong: true,
       compliment: 'Ты — мой личный сорт героина',
-      showTwilightFrame: true
+      img: 'imgTwilightFrame'
     },
     {
       id: 3,
@@ -69,16 +58,17 @@
       answers: ['Французская нерпа', 'Луковый суп', 'Луи Пигодье', 'Бигош Лукович'],
       alwaysCorrect: true,
       compliment: 'Ты — лучшее, что со мной случалось!',
-      showDog: true,
+      img: 'imgDogQ3',
       showTimer: true
     },
     {
       id: 4,
       text: 'Разрешите моему купидону попасть сегодня в сердце — и не только…',
-      answers: ['Хочу скорее увидеть твою стрелу!'],
+      answers: ['Хочу скорее увидеть твою стрелу'],
       alwaysCorrect: true,
       compliment: 'Ты — самая красивая, умная, заботливая, понимающая и сексуальная женщина!',
-      isWideSingle: true
+      isWideSingle: true,
+      img: 'imgKupidonQ4'
     },
     {
       id: 5,
@@ -142,7 +132,7 @@
   function getDefaultState() {
     return {
       appVersion: APP_VERSION,
-      screenId: 'loading', // {loading,start,prologue,quiz,result,climax,final}
+      screenId: 'loading', // {loading,start,prologue,quiz,climax}
       prologueScrollDone: false,
       quiz: {
         currentQuestion: 1,
@@ -297,6 +287,24 @@
       return;
     }
 
+    if (state.screenId === 'climax') {
+      var ph = document.createElement('div');
+      ph.className = 'centerStack';
+
+      var t = document.createElement('div');
+      t.textContent = FIXED.CLIMAX_Q;
+      t.style.fontSize = '34px';
+      t.style.textAlign = 'center';
+
+      ph.appendChild(t);
+      screenEl.appendChild(ph);
+
+      safeRoot.appendChild(screenEl);
+      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
+      stopLoadingLoop();
+      return;
+    }
+
     safeRoot.appendChild(screenEl);
     requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
     stopLoadingLoop();
@@ -336,12 +344,9 @@
 
     scrollEl.addEventListener('scroll', onPrologueScroll, { passive: true });
 
-    runtime.prologue.onResize = function () {
-      requestPrologueUpdate();
-    };
+    runtime.prologue.onResize = function () { requestPrologueUpdate(); };
     window.addEventListener('resize', runtime.prologue.onResize);
 
-    // “страховка”: обновим несколько раз после входа (шрифты/лейаут)
     requestPrologueUpdate();
     setTimeout(requestPrologueUpdate, 0);
     setTimeout(requestPrologueUpdate, 180);
@@ -350,7 +355,6 @@
   function teardownPrologueRuntime() {
     if (runtime.prologue.scrollEl) runtime.prologue.scrollEl.removeEventListener('scroll', onPrologueScroll);
     if (runtime.prologue.scrollRaf) cancelAnimationFrame(runtime.prologue.scrollRaf);
-
     if (runtime.prologue.onResize) window.removeEventListener('resize', runtime.prologue.onResize);
 
     runtime.prologue.scrollEl = null;
@@ -359,9 +363,7 @@
     runtime.prologue.onResize = null;
   }
 
-  function onPrologueScroll() {
-    requestPrologueUpdate();
-  }
+  function onPrologueScroll() { requestPrologueUpdate(); }
 
   function requestPrologueUpdate() {
     if (runtime.prologue.scrollRaf) return;
@@ -376,8 +378,8 @@
     var anchorEl = runtime.prologue.anchorEl;
     if (!scrollEl || !anchorEl) return;
 
-    // Параллакс
     var st = scrollEl.scrollTop;
+
     var bg = document.getElementById('stageBg');
     if (bg) {
       var max = Math.max(1, scrollEl.scrollHeight - scrollEl.clientHeight);
@@ -386,10 +388,9 @@
       bg.style.transform = 'translate3d(0,' + y + 'px,0) scale(1.045)';
     }
 
-    // Надёжный триггер якоря через геометрию
     var a = anchorEl.getBoundingClientRect();
     var c = scrollEl.getBoundingClientRect();
-    var relTop = a.top - c.top; // положение якоря внутри скролл-контейнера
+    var relTop = a.top - c.top;
 
     if (relTop <= scrollEl.clientHeight - 40) {
       state.prologueScrollDone = true;
@@ -435,54 +436,26 @@
     var qAnswers = wrap.querySelector('#qAnswers');
 
     qText.textContent = q.text || '';
-
     qMedia.innerHTML = '';
 
-    if (q.id === 1) {
-  var imgR = document.createElement('img');
-  imgR.className = 'quizImage';
-  imgR.src = ASSETS.imgRetroQ1;
-  imgR.alt = '';
-  imgR.onerror = function () { imgR.remove(); };
-  qMedia.appendChild(imgR);
-}
-
-if (q.id === 4) {
-  var imgK = document.createElement('img');
-  imgK.className = 'quizImage';
-  imgK.src = ASSETS.imgKupidonQ4;
-  imgK.alt = '';
-  imgK.onerror = function () { imgK.remove(); };
-  qMedia.appendChild(imgK);
-}
-
-
-    if (q.showTwilightFrame) {
-      var imgT = document.createElement('img');
-      imgT.className = 'quizImage';
-      imgT.src = ASSETS.imgTwilightFrame;
-      imgT.alt = '';
-      qMedia.appendChild(imgT);
+    if (q.img && ASSETS[q.img]) {
+      var img = document.createElement('img');
+      img.className = 'quizImage';
+      img.src = ASSETS[q.img];
+      img.alt = '';
+      img.onerror = function () { img.remove(); };
+      qMedia.appendChild(img);
     }
 
-    if (q.showDog) {
-      var imgD = document.createElement('img');
-      imgD.className = 'quizImage';
-      imgD.src = ASSETS.imgDogQ3;
-      imgD.alt = '';
-      qMedia.appendChild(imgD);
+    if (q.showColorPlaque) {
+      var plaque = document.createElement('div');
+      plaque.className = 'colorPlaque';
+      plaque.innerHTML =
+        '<div class="colorSwatch" style="background:#ADFF2F;"></div>' +
+        '<div class="colorLabel">Kinetic Yellow</div>';
+      qMedia.appendChild(plaque);
     }
 
-    if (q.id === 5) {
-  var plaque = document.createElement('div');
-  plaque.className = 'colorPlaque';
-  plaque.innerHTML =
-    '<div class="colorSwatch" style="background:#ADFF2F;"></div>' +
-    '<div class="colorLabel">Kinetic Yellow</div>';
-  qMedia.appendChild(plaque);
-}
-
-    // Q3 большой таймер в правом верхнем
     if (q.showTimer) {
       var corner = document.createElement('div');
       corner.className = 'q3CornerTimer';
@@ -491,10 +464,8 @@ if (q.id === 4) {
       wrap.appendChild(corner);
     }
 
-    // 2 колонки для 4 вариантов
     if (q.answers.length === 4) qAnswers.classList.add('quizAnswersGrid--2col');
 
-    // Answers
     qAnswers.innerHTML = '';
     var selected = state.quiz.answers[qIdx];
 
@@ -520,7 +491,6 @@ if (q.id === 4) {
       qAnswers.appendChild(b);
     }
 
-    // Topbar nav
     var backBtn = wrap.querySelector('#navBack');
     var nextBtn = wrap.querySelector('#navNext');
 
@@ -548,22 +518,21 @@ if (q.id === 4) {
   }
 
   function goNextQuestion() {
-  if (!canGoNextFromCurrent()) return;
+    if (!canGoNextFromCurrent()) return;
 
-  var qIdx = qIndexFromState();
+    var qIdx = qIndexFromState();
 
-  // Если был 5-й вопрос — сразу на climax
-  if (qIdx >= 4) {
+    if (qIdx >= 4) {
+      closeOverlay();
+      goToScreen('climax');
+      return;
+    }
+
+    state.quiz.currentQuestion = qIdx + 2;
+    saveState();
     closeOverlay();
-    goToScreen('climax');
-    return;
+    renderScreen();
   }
-
-  state.quiz.currentQuestion = qIdx + 2;
-  saveState();
-  closeOverlay();
-  renderScreen();
-}
 
   function selectAnswer(answerIndex) {
     var qIdx = qIndexFromState();
@@ -576,11 +545,10 @@ if (q.id === 4) {
     state.quiz.answers[qIdx] = answerIndex;
     saveState();
 
-    // Всегда верно (Q3/Q4)
     if (q.alwaysCorrect) {
       state.quiz.isCorrect[qIdx] = true;
       saveState();
-      showCorrectOverlay(q);
+      showCorrectOverlay(q, false);
       renderScreen();
       return;
     }
@@ -591,7 +559,6 @@ if (q.id === 4) {
       state.quiz.isCorrect[qIdx] = true;
       saveState();
 
-      // Q2: “стикер Эдварда” один раз
       var showEdwardSticker = false;
       if (q.id === 2 && state.quiz.edwardShown !== true) {
         state.quiz.edwardShown = true;
@@ -604,7 +571,6 @@ if (q.id === 4) {
       return;
     }
 
-    // Неверно (Q1/Q2/Q5)
     if (q.repeatOnWrong === true) {
       state.quiz.attempts[qIdx] = (state.quiz.attempts[qIdx] || 0) + 1;
       saveState();
@@ -621,8 +587,6 @@ if (q.id === 4) {
         runtime.wrongHold.ansIdx = -1;
         renderScreen();
       });
-
-      return;
     }
   }
 
@@ -632,16 +596,10 @@ if (q.id === 4) {
 
     var btnText = (q.id === 5) ? UI.GO_FURTHER : UI.NEXT_Q_BTN;
 
-...
-
-btn.addEventListener('click', function () {
-  if (q.id === 5) {
-    closeOverlay();
-    goToScreen('climax');
-    return;
-  }
-  goNextQuestion();
-});
+    var stickerHtml = '';
+    if (withEdwardSticker === true) {
+      stickerHtml = '<img class="stickerEdward" src="' + escapeAttr(ASSETS.imgEdward) + '" alt="" />';
+    }
 
     overlay.innerHTML = ''
       + '<div class="modal" id="modalRoot">'
@@ -660,6 +618,7 @@ btn.addEventListener('click', function () {
     btn.addEventListener('click', function () {
       if (q.id === 5) {
         closeOverlay();
+        goToScreen('climax');
         return;
       }
       goNextQuestion();
@@ -778,13 +737,11 @@ btn.addEventListener('click', function () {
   function preloadAssets(onProgress01) {
     var urls = [
       ASSETS.audioMusic,
-      ASSETS.videoMp4,
-      ASSETS.videoWebm,
       ASSETS.imgEdward,
       ASSETS.imgTwilightFrame,
       ASSETS.imgDogQ3,
-      ASSETS.imgNerpaHead,
-      ASSETS.imgHeartBall
+      ASSETS.imgRetroQ1,
+      ASSETS.imgKupidonQ4
     ];
 
     var done = 0;
@@ -839,11 +796,7 @@ btn.addEventListener('click', function () {
 
   // ===== Utils =====
 
-  function clamp01(x) {
-    if (x < 0) return 0;
-    if (x > 1) return 1;
-    return x;
-  }
+  function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
 
   function clampInt(x, min, max) {
     var v = parseInt(x, 10);
@@ -862,7 +815,5 @@ btn.addEventListener('click', function () {
       .replaceAll("'", '&#039;');
   }
 
-  function escapeAttr(s) {
-    return escapeHtml(s);
-  }
+  function escapeAttr(s) { return escapeHtml(s); }
 })();
