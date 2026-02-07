@@ -760,32 +760,40 @@ function clampCentralY(arenaH, btnH, y) {
   return clamp(y, min, max);
 }
 
-    // На десктопе: убегаем при наведении, на таче: pointerdown тоже сработает. [web:288][web:297]
-    var run = function (ev) {
-      if (ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-      }
-      moveNoButton(false);
-    };
+    // 1) Первый “толчок” — на первое движение мыши/указателя по экрану climax
+runtime.climax.firstNudgeDone = false;
 
-var onArenaMove = function (ev) {
+var firstNudge = function () {
   if (runtime.climax.firstNudgeDone) return;
-
-  // как только курсор/палец двинулся в зоне — сдвигаем "НЕТ" один раз
   runtime.climax.firstNudgeDone = true;
   moveNoButton(true);
 };
 
-arena.addEventListener('pointermove', onArenaMove, { passive: true });
-runtime.climax.onArenaMove = onArenaMove;
-    
-    noBtn.addEventListener('pointerenter', run);
-    noBtn.addEventListener('pointerdown', run);
+// Вешаем на safeRoot (ловит движение вообще везде на этом экране)
+var safeRoot = document.getElementById('safeRoot');
+if (safeRoot) {
+  safeRoot.addEventListener('pointermove', firstNudge);
+  safeRoot.addEventListener('mousemove', firstNudge);
+  runtime.climax.firstNudgeHost = safeRoot;
+  runtime.climax.onFirstNudge = firstNudge;
+}
 
-    runtime.climax.onResize = function () {
-  keepNoInCentralBounds();
+// 2) Дальше “НЕТ” убегает только при попытке навести/нажать на неё
+var run = function () {
+  moveNoButton(false);
 };
+
+// Pointer events (современные)
+noBtn.addEventListener('pointerenter', run);   // [web:288]
+noBtn.addEventListener('pointerdown', run);    // [web:297]
+
+// Fallback для мыши (на всякий)
+noBtn.addEventListener('mouseenter', run);     // [web:333]
+noBtn.addEventListener('mousedown', run);
+
+// Инициализация позиции + проверка границ
+setInitialClimaxPositions();
+keepNoInCentralBounds();
 
     function keepNoInCentralBounds() {
   var arena = runtime.climax.arenaEl;
@@ -816,19 +824,33 @@ runtime.climax.onArenaMove = onArenaMove;
   }
 
   function teardownClimaxRuntime() {
-    if (runtime.climax.onResize) window.removeEventListener('resize', runtime.climax.onResize);
-    if (runtime.climax.arenaEl && runtime.climax.onArenaMove) {
-  runtime.climax.arenaEl.removeEventListener('pointermove', runtime.climax.onArenaMove);
-}
-runtime.climax.onArenaMove = null;
-runtime.climax.firstNudgeDone = false;
-
-    runtime.climax.arenaEl = null;
-    runtime.climax.yesBtn = null;
-    runtime.climax.noBtn = null;
-    runtime.climax.onResize = null;
+  // resize
+  if (runtime.climax.onResize) {
+    window.removeEventListener('resize', runtime.climax.onResize);
   }
 
+  // старый вариант: pointermove на арене (если был)
+  if (runtime.climax.arenaEl && runtime.climax.onArenaMove) {
+    runtime.climax.arenaEl.removeEventListener('pointermove', runtime.climax.onArenaMove);
+  }
+  runtime.climax.onArenaMove = null;
+
+  // новый вариант: первый "толчок" на safeRoot
+  if (runtime.climax.firstNudgeHost && runtime.climax.onFirstNudge) {
+    runtime.climax.firstNudgeHost.removeEventListener('pointermove', runtime.climax.onFirstNudge);
+    runtime.climax.firstNudgeHost.removeEventListener('mousemove', runtime.climax.onFirstNudge);
+  }
+  runtime.climax.firstNudgeHost = null;
+  runtime.climax.onFirstNudge = null;
+  runtime.climax.firstNudgeDone = false;
+
+  // чистим ссылки
+  runtime.climax.arenaEl = null;
+  runtime.climax.yesBtn = null;
+  runtime.climax.noBtn = null;
+  runtime.climax.onResize = null;
+}
+  
   function keepNoInBounds() {
     var arena = runtime.climax.arenaEl;
     var noBtn = runtime.climax.noBtn;
