@@ -171,7 +171,6 @@
     saveState();
     renderScreen();
 
-    // если после перехода мы на прологе — нужно “повесить” скролл-хендлеры
     if (state.screenId === 'prologue') {
       setupPrologueRuntime();
     }
@@ -223,6 +222,10 @@
     }
 
     if (state.screenId === 'start') {
+      // сброс inline transform, если он остался от пролога
+      var bg0 = document.getElementById('stageBg');
+      if (bg0) bg0.style.transform = '';
+
       var wrap = document.createElement('div');
       wrap.className = 'centerStack';
 
@@ -255,15 +258,12 @@
       requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
 
       stopLoadingLoop();
-
-      // важно: после рендера — навесить скролл-обработчики
       setupPrologueRuntime();
       return;
     }
 
     if (state.screenId === 'quiz') {
       // Стадия 4: только “не-скроллящийся” экран-заглушка.
-      // В Стадии 5 тут появится реальный квиз.
       var ph = document.createElement('div');
       ph.className = 'quizPlaceholder';
       ph.setAttribute('aria-label', 'Квиз');
@@ -295,7 +295,8 @@
     wrap.className = 'prologueScroll';
     wrap.id = 'prologueScroll';
 
-    // Никаких новых видимых текстов — только фикс-пролог из ТЗ.
+    // ВАЖНО: больше не показываем “плашку-плейсхолдер” в прологе (она путала).
+    // Оставляем только спейсеры + якорь.
     wrap.innerHTML = ''
       + '<div class="prologueSpacerTop"></div>'
       + '<section class="prologueGreetingSection" id="prologueGreeting">'
@@ -303,8 +304,7 @@
       + '</section>'
       + '<div class="prologueSpacerMid"></div>'
       + '<div class="quizAnchor" id="quizAnchor"></div>'
-      + '<div class="quizPlaceholder" aria-hidden="true"></div>'
-      + '<div style="height: 200px;"></div>';
+      + '<div style="height: 480px;"></div>';
 
     return wrap;
   }
@@ -319,13 +319,13 @@
 
     scrollEl.addEventListener('scroll', onPrologueScroll, { passive: true });
 
-    // Первичный расчёт (параллакс на старте)
     requestPrologueUpdate();
   }
 
   function teardownPrologueRuntime() {
     if (runtime.prologue.scrollEl) {
-      runtime.prologue.scrollEl.removeEventListener('scroll', onPrologueScroll, { passive: true });
+      // removeEventListener: достаточно указать тип и функцию
+      runtime.prologue.scrollEl.removeEventListener('scroll', onPrologueScroll);
     }
     if (runtime.prologue.scrollRaf) {
       cancelAnimationFrame(runtime.prologue.scrollRaf);
@@ -355,17 +355,16 @@
     var st = scrollEl.scrollTop;
     runtime.prologue.lastScrollTop = st;
 
-    // Деликатный параллакс: двигаем stageBg чуть-чуть вверх по мере скролла
+    // Деликатный параллакс фона
     var bg = document.getElementById('stageBg');
     if (bg) {
       var max = Math.max(1, scrollEl.scrollHeight - scrollEl.clientHeight);
       var t = clamp01(st / max);
-      var y = -Math.round(t * 18); // аккуратно
+      var y = -Math.round(t * 18);
       bg.style.transform = 'translate3d(0,' + y + 'px,0) scale(1.045)';
     }
 
-    // Якорь квиза: как только доскроллили до anchor — фиксируем и переходим в quiz
-    // (так “страница перестаёт прокручиваться”). 
+    // Якорь квиза → переход на экран quiz и остановка скролла (по ТЗ)
     var threshold = anchorEl.offsetTop - 20;
     if (st >= threshold && state.prologueScrollDone !== true) {
       state.prologueScrollDone = true;
@@ -386,7 +385,7 @@
       runtime.musicEl.volume = 0.5;
     }
 
-    var p = runtime.musicEl.play(); // Promise может быть отклонён [web:17]
+    var p = runtime.musicEl.play();
     if (p && typeof p.then === 'function') {
       p.then(function () {
         state.audio.musicStarted = true;
