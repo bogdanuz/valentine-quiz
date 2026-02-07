@@ -1,10 +1,6 @@
 (function () {
   'use strict';
 
-  // =========================
-  // Константы ТЗ (не менять)
-  // =========================
-
   var STORAGE_KEY = 'valentine_state_v1';
   var APP_VERSION = 'v1';
 
@@ -17,13 +13,11 @@
     MEM_COMPLIMENT: 'Ты — мой личный сорт героина'
   };
 
-  // Нефиксированные, но нужные UI-строки
   var UI = {
     START_BTN: 'Начать',
     LOADING_A11Y: 'Загрузка…'
   };
 
-  // Пути ассетов (ТЗ, раздел 7)
   var ASSETS = {
     audioMusic: 'assets/audio/music.mp3',
     videoMp4: 'assets/video/valentine.mp4',
@@ -36,19 +30,13 @@
     imgHeartBall: 'assets/img/fx/heart-ball.png'
   };
 
-  // Тайминги (только из ТЗ/стадий)
   var T = {
     BASE_TRANSITION_MS: 280,
     START_TO_PROLOGUE_ZOOM_MS: 400
   };
 
-  // =========================
-  // State (single source of truth)
-  // =========================
-
   var state = getDefaultState();
 
-  // Runtime (не сохраняем в localStorage)
   var runtime = {
     preloadStarted: false,
     preloadDone: false,
@@ -59,12 +47,15 @@
     rafId: 0,
 
     musicEl: null,
-    musicResumeArmed: false
-  };
+    musicResumeArmed: false,
 
-  // =========================
-  // DOM
-  // =========================
+    prologue: {
+      scrollEl: null,
+      anchorEl: null,
+      scrollRaf: 0,
+      lastScrollTop: 0
+    }
+  };
 
   var appEl = document.getElementById('app');
 
@@ -75,14 +66,9 @@
     if (restored) state = restored;
 
     ensureRoot();
-
     if (!state.screenId) state.screenId = 'loading';
 
     renderScreen();
-
-    // Важно: после F5 музыку нельзя автозапускать без жеста пользователя,
-    // поэтому если ранее музыка уже запускалась, разрешаем старт с начала
-    // по первому клику/клавише на странице. [web:121][web:17]
     armMusicResumeOnNextUserGestureIfNeeded();
 
     if (isDev()) {
@@ -93,14 +79,20 @@
         resetState: function(){
           state = getDefaultState();
           saveState();
+
           runtime.preloadStarted = false;
           runtime.preloadDone = false;
           runtime.preloadFailed = false;
+
           runtime.target01 = 0;
           runtime.shown01 = 0;
           stopLoadingLoop();
+
           runtime.musicEl = null;
           runtime.musicResumeArmed = false;
+
+          teardownPrologueRuntime();
+
           renderScreen();
           armMusicResumeOnNextUserGestureIfNeeded();
         }
@@ -120,9 +112,7 @@
         attempts: [0, 0, 0, 0, 0],
         edwardShown: false
       },
-      climax: {
-        noRunCount: 0
-      },
+      climax: { noRunCount: 0 },
       finale: {
         videoStarted: false,
         ballsStarted: false,
@@ -130,15 +120,9 @@
         easterHintShown: false,
         nerpaActivated: false
       },
-      audio: {
-        musicStarted: false
-      }
+      audio: { musicStarted: false }
     };
   }
-
-  // =========================
-  // Storage
-  // =========================
 
   function loadState() {
     try {
@@ -164,10 +148,6 @@
     }
   }
 
-  // =========================
-  // Screen machine
-  // =========================
-
   function goToScreen(screenId) {
     var ok =
       screenId === 'loading' ||
@@ -185,9 +165,16 @@
 
     if (state.screenId === screenId) return;
 
+    teardownPrologueRuntime();
+
     state.screenId = screenId;
     saveState();
     renderScreen();
+
+    // если после перехода мы на прологе — нужно “повесить” скролл-хендлеры
+    if (state.screenId === 'prologue') {
+      setupPrologueRuntime();
+    }
   }
 
   function ensureRoot() {
@@ -215,9 +202,7 @@
       screenEl.appendChild(renderLoading());
       safeRoot.appendChild(screenEl);
 
-      requestAnimationFrame(function () {
-        screenEl.classList.add('screen--active');
-      });
+      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
 
       if (!runtime.preloadStarted) {
         runtime.preloadStarted = true;
@@ -248,12 +233,8 @@
       btn.textContent = UI.START_BTN;
 
       btn.addEventListener('click', function () {
-        // ТЗ: старт музыки строго по клику “Начать”
-        startMusicFromUserGesture(); // play() может быть заблокирован и возвращает Promise [web:17]
-
-        // START → ПРОЛОГ: лёгкий zoom-in фона ~400ms + fade-in пролога
+        startMusicFromUserGesture();
         zoomBackgroundIn();
-
         goToScreen('prologue');
       });
 
@@ -261,33 +242,41 @@
       screenEl.appendChild(wrap);
       safeRoot.appendChild(screenEl);
 
-      requestAnimationFrame(function () {
-        screenEl.classList.add('screen--active');
-      });
+      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
 
       stopLoadingLoop();
       return;
     }
 
     if (state.screenId === 'prologue') {
-      // Стадия 3: только заглушка (без текста/скролла, это Стадия 4)
+      screenEl.appendChild(renderPrologue());
       safeRoot.appendChild(screenEl);
 
-      requestAnimationFrame(function () {
-        screenEl.classList.add('screen--active');
-      });
+      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
 
+      stopLoadingLoop();
+
+      // важно: после рендера — навесить скролл-обработчики
+      setupPrologueRuntime();
+      return;
+    }
+
+    if (state.screenId === 'quiz') {
+      // Стадия 4: только “не-скроллящийся” экран-заглушка.
+      // В Стадии 5 тут появится реальный квиз.
+      var ph = document.createElement('div');
+      ph.className = 'quizPlaceholder';
+      ph.setAttribute('aria-label', 'Квиз');
+      screenEl.appendChild(ph);
+
+      safeRoot.appendChild(screenEl);
+      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
       stopLoadingLoop();
       return;
     }
 
-    screenEl.appendChild(document.createElement('div'));
     safeRoot.appendChild(screenEl);
-
-    requestAnimationFrame(function () {
-      screenEl.classList.add('screen--active');
-    });
-
+    requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
     stopLoadingLoop();
   }
 
@@ -298,7 +287,95 @@
   }
 
   // =========================
-  // Audio (START click)
+  // ПРОЛОГ (скролл + параллакс + якорь квиза)
+  // =========================
+
+  function renderPrologue() {
+    var wrap = document.createElement('div');
+    wrap.className = 'prologueScroll';
+    wrap.id = 'prologueScroll';
+
+    // Никаких новых видимых текстов — только фикс-пролог из ТЗ.
+    wrap.innerHTML = ''
+      + '<div class="prologueSpacerTop"></div>'
+      + '<section class="prologueGreetingSection" id="prologueGreeting">'
+      + '  <div class="prologueGreetingCard">' + escapeHtml(FIXED.PROLOGUE) + '</div>'
+      + '</section>'
+      + '<div class="prologueSpacerMid"></div>'
+      + '<div class="quizAnchor" id="quizAnchor"></div>'
+      + '<div class="quizPlaceholder" aria-hidden="true"></div>'
+      + '<div style="height: 200px;"></div>';
+
+    return wrap;
+  }
+
+  function setupPrologueRuntime() {
+    var scrollEl = document.getElementById('prologueScroll');
+    var anchorEl = document.getElementById('quizAnchor');
+    if (!scrollEl || !anchorEl) return;
+
+    runtime.prologue.scrollEl = scrollEl;
+    runtime.prologue.anchorEl = anchorEl;
+
+    scrollEl.addEventListener('scroll', onPrologueScroll, { passive: true });
+
+    // Первичный расчёт (параллакс на старте)
+    requestPrologueUpdate();
+  }
+
+  function teardownPrologueRuntime() {
+    if (runtime.prologue.scrollEl) {
+      runtime.prologue.scrollEl.removeEventListener('scroll', onPrologueScroll, { passive: true });
+    }
+    if (runtime.prologue.scrollRaf) {
+      cancelAnimationFrame(runtime.prologue.scrollRaf);
+      runtime.prologue.scrollRaf = 0;
+    }
+    runtime.prologue.scrollEl = null;
+    runtime.prologue.anchorEl = null;
+  }
+
+  function onPrologueScroll() {
+    requestPrologueUpdate();
+  }
+
+  function requestPrologueUpdate() {
+    if (runtime.prologue.scrollRaf) return;
+    runtime.prologue.scrollRaf = requestAnimationFrame(function () {
+      runtime.prologue.scrollRaf = 0;
+      updatePrologueScrollEffects();
+    });
+  }
+
+  function updatePrologueScrollEffects() {
+    var scrollEl = runtime.prologue.scrollEl;
+    var anchorEl = runtime.prologue.anchorEl;
+    if (!scrollEl || !anchorEl) return;
+
+    var st = scrollEl.scrollTop;
+    runtime.prologue.lastScrollTop = st;
+
+    // Деликатный параллакс: двигаем stageBg чуть-чуть вверх по мере скролла
+    var bg = document.getElementById('stageBg');
+    if (bg) {
+      var max = Math.max(1, scrollEl.scrollHeight - scrollEl.clientHeight);
+      var t = clamp01(st / max);
+      var y = -Math.round(t * 18); // аккуратно
+      bg.style.transform = 'translate3d(0,' + y + 'px,0) scale(1.045)';
+    }
+
+    // Якорь квиза: как только доскроллили до anchor — фиксируем и переходим в quiz
+    // (так “страница перестаёт прокручиваться”). 
+    var threshold = anchorEl.offsetTop - 20;
+    if (st >= threshold && state.prologueScrollDone !== true) {
+      state.prologueScrollDone = true;
+      saveState();
+      goToScreen('quiz');
+    }
+  }
+
+  // =========================
+  // Audio
   // =========================
 
   function startMusicFromUserGesture() {
@@ -306,10 +383,10 @@
       runtime.musicEl = new Audio();
       runtime.musicEl.preload = 'auto';
       runtime.musicEl.src = ASSETS.audioMusic;
-      runtime.musicEl.volume = 0.5; // 0..1 (примерно 50%)
+      runtime.musicEl.volume = 0.5;
     }
 
-    var p = runtime.musicEl.play(); // возвращает Promise, может быть отклонён [web:17]
+    var p = runtime.musicEl.play(); // Promise может быть отклонён [web:17]
     if (p && typeof p.then === 'function') {
       p.then(function () {
         state.audio.musicStarted = true;
@@ -324,12 +401,8 @@
   }
 
   function armMusicResumeOnNextUserGestureIfNeeded() {
-    // Если пользователь уже запускал музыку раньше, после F5 мы можем стартовать её заново,
-    // но строго по пользовательскому жесту (клик/клавиша). [web:121]
     if (!state.audio || state.audio.musicStarted !== true) return;
     if (runtime.musicResumeArmed) return;
-
-    // Не делаем это на LOADING, чтобы не “подменять” правило “музыка по клику Начать”
     if (state.screenId === 'loading' || state.screenId === 'start') return;
 
     runtime.musicResumeArmed = true;
@@ -340,39 +413,25 @@
       if (fired) return;
       fired = true;
 
-      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('click', onClick, true);
       document.removeEventListener('keydown', onKeyDown, true);
 
-      // Запуск с начала (currentTime не восстанавливаем) — достаточно просто play()
       startMusicFromUserGesture();
     }
 
-document.addEventListener('click', onClick, true);
-document.addEventListener('keydown', onKeyDown, true);
+    function onClick() { fireOnce(); }
 
-function fireOnce() {
-  if (fired) return;
-  fired = true;
+    function onKeyDown(e) {
+      if (!e) return;
+      if (e.key === 'Enter' || e.key === ' ') fireOnce();
+    }
 
-  document.removeEventListener('click', onClick, true);
-  document.removeEventListener('keydown', onKeyDown, true);
-
-  startMusicFromUserGesture();
-}
-
-function onClick() {
-  fireOnce();
-}
-
-function onKeyDown(e) {
-  if (!e) return;
-  if (e.key === 'Enter' || e.key === ' ') fireOnce();
-}
-
+    document.addEventListener('click', onClick, true);
+    document.addEventListener('keydown', onKeyDown, true);
   }
 
   // =========================
-  // LOADING UI
+  // LOADING
   // =========================
 
   function renderLoading() {
@@ -401,10 +460,6 @@ function onKeyDown(e) {
     return wrap;
   }
 
-  // =========================
-  // Preload (реальный)
-  // =========================
-
   function preloadAssets(onProgress01) {
     var urls = [
       ASSETS.audioMusic,
@@ -429,11 +484,8 @@ function onKeyDown(e) {
         var it = items[i];
         var ratio = 0;
 
-        if (it.known && it.total > 0) {
-          ratio = it.loaded / it.total;
-        } else {
-          ratio = it.done ? 1 : 0;
-        }
+        if (it.known && it.total > 0) ratio = it.loaded / it.total;
+        else ratio = it.done ? 1 : 0;
 
         sum += clamp01(ratio);
       }
@@ -455,9 +507,7 @@ function onKeyDown(e) {
       });
     });
 
-    return Promise.all(tasks).then(function () {
-      onProgress01(1);
-    });
+    return Promise.all(tasks).then(function () { onProgress01(1); });
   }
 
   function fetchWithProgress(url, onItemProgress) {
@@ -487,10 +537,7 @@ function onKeyDown(e) {
             onItemProgress(loaded, known ? total : loaded, known);
             return;
           }
-
-          var chunk = res.value;
-          loaded += chunk.byteLength;
-
+          loaded += res.value.byteLength;
           onItemProgress(loaded, total, known);
           return readNext();
         });
@@ -499,10 +546,6 @@ function onKeyDown(e) {
       return readNext();
     });
   }
-
-  // =========================
-  // LOADING loop
-  // =========================
 
   function startLoadingLoop() {
     if (runtime.rafId) return;
@@ -518,11 +561,7 @@ function onKeyDown(e) {
       if (runtime.preloadDone && runtime.shown01 > 0.999) {
         runtime.shown01 = 1;
         renderLoadingUI(1);
-
-        if (state.screenId === 'loading') {
-          goToScreen('start');
-        }
-
+        if (state.screenId === 'loading') goToScreen('start');
         runtime.rafId = 0;
         return;
       }
@@ -545,9 +584,7 @@ function onKeyDown(e) {
     var percentEl = document.getElementById('loadingPercent');
     var rect = document.getElementById('heartFillRect');
 
-    if (percentEl) {
-      percentEl.textContent = Math.round(clamp01(p01) * 100) + '%';
-    }
+    if (percentEl) percentEl.textContent = Math.round(clamp01(p01) * 100) + '%';
 
     if (rect) {
       var h = clamp01(p01) * 90;
@@ -569,6 +606,15 @@ function onKeyDown(e) {
 
   function isDev() {
     return new URLSearchParams(location.search).get('dev') === '1';
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
   }
 
   // Заготовки под следующие стадии
