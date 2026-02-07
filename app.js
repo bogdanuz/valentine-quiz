@@ -36,9 +36,10 @@
     imgHeartBall: 'assets/img/fx/heart-ball.png'
   };
 
-  // Тайминги (только из ТЗ/стадий; “магии” без нужды не добавляем)
+  // Тайминги (только из ТЗ/стадий)
   var T = {
-    BASE_TRANSITION_MS: 280
+    BASE_TRANSITION_MS: 280,
+    START_TO_PROLOGUE_ZOOM_MS: 400
   };
 
   // =========================
@@ -53,9 +54,11 @@
     preloadDone: false,
     preloadFailed: false,
 
-    target01: 0,     // 0..1
-    shown01: 0,      // 0..1 (кинетик сглаживание)
-    rafId: 0
+    target01: 0,
+    shown01: 0,
+    rafId: 0,
+
+    musicEl: null
   };
 
   // =========================
@@ -72,7 +75,6 @@
 
     ensureRoot();
 
-    // На Стадии 2 стартуем с LOADING (если нет восстановленного экрана)
     if (!state.screenId) state.screenId = 'loading';
 
     renderScreen();
@@ -90,6 +92,8 @@
           runtime.preloadFailed = false;
           runtime.target01 = 0;
           runtime.shown01 = 0;
+          stopLoadingLoop();
+          runtime.musicEl = null;
           renderScreen();
         }
       };
@@ -183,6 +187,7 @@
 
     appEl.innerHTML = ''
       + '<div class="stage" role="application">'
+      + '  <div class="stageBg" id="stageBg"></div>'
       + '  <div class="safe" id="safeRoot"></div>'
       + '  <div class="overlay" id="overlay" aria-hidden="true"></div>'
       + '</div>';
@@ -206,7 +211,6 @@
         screenEl.classList.add('screen--active');
       });
 
-      // Стартуем предзагрузку ровно один раз на заход в LOADING
       if (!runtime.preloadStarted) {
         runtime.preloadStarted = true;
         startLoadingLoop();
@@ -219,7 +223,6 @@
         }).catch(function (e) {
           runtime.preloadFailed = true;
           console.error('Preload failed:', e);
-          runtime.target01 = runtime.target01; // оставим как есть
         });
       }
 
@@ -236,9 +239,14 @@
       btn.id = 'startBtn';
       btn.textContent = UI.START_BTN;
 
-      // На Стадии 2 клик не запускает музыку (строго по ТЗ — Стадия 3).
       btn.addEventListener('click', function () {
-        saveState();
+        // ТЗ: старт музыки строго по клику “Начать”, громкость ~50%
+        startMusicFromUserGesture();
+
+        // ТЗ: START → ПРОЛОГ: лёгкий zoom-in фона ~400ms + fade-in пролога
+        zoomBackgroundIn();
+
+        goToScreen('prologue');
       });
 
       wrap.appendChild(btn);
@@ -253,7 +261,18 @@
       return;
     }
 
-    // Заглушки остальных экранов пока не реализуем
+    if (state.screenId === 'prologue') {
+      // Стадия 3: только заглушка (без текста/скролла, это Стадия 4)
+      safeRoot.appendChild(screenEl);
+
+      requestAnimationFrame(function () {
+        screenEl.classList.add('screen--active');
+      });
+
+      stopLoadingLoop();
+      return;
+    }
+
     screenEl.appendChild(document.createElement('div'));
     safeRoot.appendChild(screenEl);
 
@@ -263,6 +282,48 @@
 
     stopLoadingLoop();
   }
+
+  function zoomBackgroundIn() {
+    var bg = document.getElementById('stageBg');
+    if (!bg) return;
+    bg.classList.add('stageBg--zoomIn');
+  }
+
+  // =========================
+  // Audio (START click)
+  // =========================
+
+  function startMusicFromUserGesture() {
+    // Если уже создавали элемент — не пересоздаём
+    if (!runtime.musicEl) {
+      runtime.musicEl = new Audio();
+      runtime.musicEl.preload = 'auto';
+      runtime.musicEl.src = ASSETS.audioMusic;
+
+      // volume: число 0..1, 0.5 = ~50% [MDN]
+      runtime.musicEl.volume = 0.5;
+    }
+
+    // play() возвращает Promise и может быть отклонён (например, если браузер блокирует) [MDN]
+    var p = runtime.musicEl.play();
+    if (p && typeof p.then === 'function') {
+      p.then(function () {
+        state.audio.musicStarted = true;
+        saveState();
+      }).catch(function (e) {
+        console.warn('Music play() blocked/failed:', e);
+        // Не показываем UI (не задано ТЗ), просто не ставим musicStarted=true.
+      });
+    } else {
+      // На очень старых браузерах Promise может отсутствовать
+      state.audio.musicStarted = true;
+      saveState();
+    }
+  }
+
+  // =========================
+  // LOADING UI
+  // =========================
 
   function renderLoading() {
     var wrap = document.createElement('div');
@@ -358,7 +419,6 @@
       var total = lenHeader ? parseInt(lenHeader, 10) : 0;
       var known = !!(total && total > 0);
 
-      // Если поток недоступен — просто дожидаемся полной загрузки
       if (!body || !body.getReader) {
         return resp.arrayBuffer().then(function (buf) {
           var size = known ? total : (buf ? buf.byteLength : 0);
@@ -374,7 +434,6 @@
       function readNext() {
         return reader.read().then(function (res) {
           if (res.done) {
-            // Если total неизвестен, считаем total=loaded для корректного 100%
             onItemProgress(loaded, known ? total : loaded, known);
             return;
           }
@@ -383,8 +442,6 @@
           loaded += chunk.byteLength;
 
           onItemProgress(loaded, total, known);
-
-          // Не сохраняем chunk — просто “съедаем” поток, чтобы файл реально скачался
           return readNext();
         });
       }
@@ -394,7 +451,7 @@
   }
 
   // =========================
-  // LOADING loop (кинетик прогресса)
+  // LOADING loop
   // =========================
 
   function startLoadingLoop() {
@@ -406,15 +463,12 @@
         return;
       }
 
-      // “Кинематик”: сглаживаем отображаемый прогресс к целевому
       runtime.shown01 = runtime.shown01 + (runtime.target01 - runtime.shown01) * 0.14;
 
-      // Если предзагрузка завершена — даём дойти до 100% и переходим
       if (runtime.preloadDone && runtime.shown01 > 0.999) {
         runtime.shown01 = 1;
         renderLoadingUI(1);
 
-        // Авто-переход на START на 100%
         if (state.screenId === 'loading') {
           goToScreen('start');
         }
@@ -424,7 +478,6 @@
       }
 
       renderLoadingUI(runtime.shown01);
-
       runtime.rafId = requestAnimationFrame(tick);
     }
 
@@ -447,7 +500,6 @@
     }
 
     if (rect) {
-      // rect заполняем снизу вверх: y уменьшается, height растёт
       var h = clamp01(p01) * 90;
       var y = 90 - h;
       rect.setAttribute('y', String(y));
@@ -469,7 +521,7 @@
     return new URLSearchParams(location.search).get('dev') === '1';
   }
 
-  // Заготовки под следующие стадии (сейчас не используем)
+  // Заготовки под следующие стадии
   function showToast(text) { void text; }
   function showModal(text, buttonText, onClose) { void text; void buttonText; void onClose; }
   function selectAnswer(questionIndex, answerIndex) { void questionIndex; void answerIndex; }
