@@ -8,10 +8,16 @@
   --bg1: #0b0f1f;
   --bg2: #1a1f3a;
 
+  --text: rgba(255,255,255,0.92);
+
   --btn-bg: rgba(255,255,255,0.12);
   --btn-bg-hover: rgba(255,255,255,0.18);
   --btn-border: rgba(255,255,255,0.22);
-  --text: rgba(255,255,255,0.92);
+
+  --card: rgba(255,255,255,0.10);
+  --card-border: rgba(255,255,255,0.16);
+
+  --t-base: 280ms; /* базовые переходы 250–300ms по ТЗ */
 }
 
 *{ box-sizing: border-box; }
@@ -21,9 +27,10 @@ html, body{
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   color: var(--text);
-  background: radial-gradient(1200px 800px at 30% 20%, rgba(255,80,140,0.20), transparent 55%),
-              radial-gradient(900px 700px at 70% 60%, rgba(90,140,255,0.18), transparent 60%),
-              linear-gradient(160deg, var(--bg1), var(--bg2));
+  background:
+    radial-gradient(1200px 800px at 30% 20%, rgba(255,80,140,0.20), transparent 55%),
+    radial-gradient(900px 700px at 70% 60%, rgba(90,140,255,0.18), transparent 60%),
+    linear-gradient(160deg, var(--bg1), var(--bg2));
   overflow: hidden;
 }
 
@@ -42,7 +49,8 @@ html, body{
   position: relative;
   border-radius: 18px;
   overflow: hidden;
-  background: radial-gradient(900px 600px at 50% 30%, rgba(255,255,255,0.06), transparent 60%);
+  background:
+    radial-gradient(900px 600px at 50% 30%, rgba(255,255,255,0.06), transparent 60%);
   box-shadow: 0 20px 80px rgba(0,0,0,0.35);
 }
 
@@ -52,10 +60,30 @@ html, body{
   right: var(--safe-x);
   top: var(--safe-y);
   bottom: var(--safe-y);
+}
+
+.screen{
+  position: absolute;
+  inset: 0;
   display: grid;
+  place-items: center;
+  transform: scale(0.985);
+  opacity: 0;
+  transition: transform var(--t-base) ease, opacity var(--t-base) ease;
+}
+
+.screen.screen--active{
+  transform: scale(1);
+  opacity: 1;
+}
+
+.centerStack{
+  display: grid;
+  gap: 14px;
   place-items: center;
 }
 
+/* Кнопки */
 .btn{
   border: 1px solid var(--btn-border);
   background: var(--btn-bg);
@@ -74,4 +102,33 @@ html, body{
 .btn:focus-visible{
   outline: 2px solid rgba(255,255,255,0.65);
   outline-offset: 3px;
+}
+
+/* Заготовка под модалку/тосты (в Стадии 5+ будет наполнено) */
+.overlay{
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  background: rgba(0,0,0,0.35);
+}
+
+.overlay.overlay--show{
+  display: grid;
+}
+
+.modal{
+  width: min(520px, calc(100% - 40px));
+  border-radius: 18px;
+  background: rgba(20,22,35,0.86);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 24px 90px rgba(0,0,0,0.55);
+  padding: 18px 18px 16px;
+  backdrop-filter: blur(8px);
+}
+
+.modalText{
+  font-size: 18px;
+  line-height: 1.35;
+  margin: 0 0 14px;
 }
