@@ -541,7 +541,7 @@ html, body{
   left: 50%;
   top: 58%;
   transform: translate(-50%, -50%);
-  transition: left 260ms ease, top 260ms ease, transform 160ms ease;
+  transition: left 420ms ease, top 420ms ease, transform 160ms ease;
   will-change: left, top;
 }
 
