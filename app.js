@@ -34,6 +34,8 @@
     imgDogQ3: 'assets/img/quiz/millionaire-dog.jpg',
     imgRetroQ1: 'assets/img/quiz/retro.jpg',
     imgKupidonQ4: 'assets/img/quiz/kupidon.jpg'
+    videoMp4: 'assets/video/valentine.mp4',
+    videoWebm: 'assets/video/valentine.webm'
   };
 
   var QUIZ = [
