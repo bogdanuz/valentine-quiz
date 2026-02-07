@@ -1251,31 +1251,6 @@ function triggerEasterFromFinal(ball) {
 
   runtime.final.raf = requestAnimationFrame(finalTick);
 }
-    runtime.final.lastVideoT = t;
-
-    // старт шаров через 3 секунды после старта видео
-    if (!runtime.final.ballsStarted && t >= 3.0) {
-      runtime.final.ballsStarted = true;
-      runtime.final.ballsFade01 = 1;
-      runtime.final.fadeMode = 0;
-      finalSpawnBalls(50);
-      finalHideHint();
-      runtime.final.hintAt = t + 2.0 + Math.random() * 3.5;
-      runtime.final.hintShown = false;
-    }
-
-    // подсказка (рандомно по времени, поверх шаров)
-    if (runtime.final.ballsStarted && !runtime.final.hintShown && t >= runtime.final.hintAt) {
-      runtime.final.hintShown = true;
-      finalShowHint();
-    }
-
-    // physics
-    finalUpdateBalls(dt);
-    finalDraw();
-
-    runtime.final.raf = requestAnimationFrame(finalTick);
-  }
 
   function finalShowHint() {
     if (!runtime.final || !runtime.final.hintEl) return;
