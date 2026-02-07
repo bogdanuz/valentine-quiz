@@ -206,14 +206,19 @@
   function ensureRoot() {
     if (!appEl) return;
 
-    appEl.innerHTML = ''
+        appEl.innerHTML = ''
       + '<div class="stage" role="application">'
       + '  <div class="stageBg" id="stageBg"></div>'
       + '  <div class="safe" id="safeRoot"></div>'
       + '  <div class="overlay" id="overlay" aria-hidden="true"></div>'
+      + '  <button class="globalReset" id="globalReset" type="button" aria-label="Reset">'
+      + '    <span class="globalResetIcon">∞</span>'
+      + '    <span class="globalResetLabel">Reset</span>'
+      + '  </button>'
       + '</div>';
 
     runtime.overlayEl = document.getElementById('overlay');
+        setupGlobalResetOnce();
   }
 
   function goToScreen(screenId) {
@@ -221,6 +226,7 @@
 
     teardownPrologueRuntime();
     teardownClimaxRuntime();
+    teardownFinalRuntime();
     stopQ3Timer();
 
     state.screenId = screenId;
@@ -230,6 +236,7 @@
     if (state.screenId === 'prologue') setupPrologueRuntime();
     if (state.screenId === 'quiz') startQ3TimerIfNeeded();
     if (state.screenId === 'climax') setupClimaxRuntime();
+    if (state.screenId === 'final') setupFinalRuntime();
   }
 
   function renderScreen() {
@@ -315,19 +322,15 @@
       return;
     }
 
-    if (state.screenId === 'final') {
-      var fw = document.createElement('div');
-      fw.className = 'centerStack';
-
-      var txt = document.createElement('div');
-      txt.className = 'finalText';
-      txt.textContent = FIXED.FINAL_PHRASE;
-
-      fw.appendChild(txt);
-      screenEl.appendChild(fw);
-
+        if (state.screenId === 'final') {
+      screenEl.appendChild(renderFinal());
       safeRoot.appendChild(screenEl);
-      requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
+
+      requestAnimationFrame(function () {
+        screenEl.classList.add('screen--active');
+        setupFinalRuntime();
+      });
+
       stopLoadingLoop();
       return;
     }
@@ -954,6 +957,370 @@ function moveNoButton(isFirstNudge) {
   noBtn.style.top  = Math.round(nextTop) + 'px';
 }
 
+  // ===== FINAL =====
+
+  function renderFinal() {
+    var wrap = document.createElement('div');
+    wrap.className = 'finalWrap';
+
+    wrap.innerHTML = ''
+      + '<div class="finalVideoFrame">'
+      + '  <video class="finalVideo" id="finalVideo" muted playsinline preload="auto" loop>'
+      + '    <source src="' + escapeAttr(ASSETS.videoWebm) + '" type="video/webm" />'
+      + '    <source src="' + escapeAttr(ASSETS.videoMp4) + '" type="video/mp4" />'
+      + '  </video>'
+      + '</div>'
+      + '<canvas class="finalCanvas" id="finalCanvas"></canvas>'
+      + '<div class="finalHud">'
+      + '  <div class="finalHint" id="finalHint">' + escapeHtml(FIXED.EASTER_HINT) + '</div>'
+      + '  <div class="finalControls">'
+      + '    <button class="finalMiniBtn" id="finalReplay" type="button">К валентинке</button>'
+      + '    <button class="finalMiniBtn" id="finalClearBalls" type="button">Убрать шары</button>'
+      + '  </div>'
+      + '</div>';
+
+    return wrap;
+  }
+
+  // runtime.final добавим “на лету”, чтобы не трогать твой текущий runtime-объект сверху
+  function setupFinalRuntime() {
+    teardownFinalRuntime();
+
+    var video = document.getElementById('finalVideo');
+    var canvas = document.getElementById('finalCanvas');
+    var hint = document.getElementById('finalHint');
+    var replayBtn = document.getElementById('finalReplay');
+    var clearBtn = document.getElementById('finalClearBalls');
+
+    if (!video || !canvas) return;
+
+    runtime.final = {
+      videoEl: video,
+      canvasEl: canvas,
+      ctx: null,
+      raf: 0,
+      lastMs: 0,
+      lastVideoT: 0,
+
+      balls: [],
+      ballsStarted: false,
+      ballsFade01: 1,
+      fadeMode: 0, // 0 none, 1 fade-out
+
+      hintEl: hint,
+      hintShown: false,
+      hintAt: 6.0,
+
+      onResize: null
+    };
+
+    runtime.final.ctx = canvas.getContext('2d');
+
+    runtime.final.onResize = function () {
+      finalResizeCanvas();
+    };
+    window.addEventListener('resize', runtime.final.onResize);
+
+    if (replayBtn) {
+      replayBtn.addEventListener('click', function () {
+        finalRestartSequence();
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        finalFadeOutBalls();
+      });
+    }
+
+    // autoplay (без звука — muted already)
+    video.muted = true;
+    video.loop = true;
+    video.play().catch(function(){});
+
+    finalResizeCanvas();
+
+    runtime.final.lastMs = performance.now();
+    runtime.final.lastVideoT = 0;
+
+    runtime.final.raf = requestAnimationFrame(finalTick);
+  }
+
+  function teardownFinalRuntime() {
+    if (!runtime.final) return;
+
+    if (runtime.final.raf) cancelAnimationFrame(runtime.final.raf);
+    if (runtime.final.onResize) window.removeEventListener('resize', runtime.final.onResize);
+
+    runtime.final = null;
+  }
+
+  function finalResizeCanvas() {
+    if (!runtime.final) return;
+    var canvas = runtime.final.canvasEl;
+    var ctx = runtime.final.ctx;
+    if (!canvas || !ctx) return;
+
+    var rect = canvas.getBoundingClientRect();
+    var dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function finalTick(nowMs) {
+    if (!runtime.final) return;
+
+    var dt = (nowMs - runtime.final.lastMs) / 1000;
+    runtime.final.lastMs = nowMs;
+    if (!isFinite(dt) || dt <= 0) dt = 0.016;
+    if (dt > 0.05) dt = 0.05;
+
+    var video = runtime.final.videoEl;
+    var t = 0;
+    if (video) t = video.currentTime || 0; // синхронизация по времени видео [web:453]
+
+    // детект лупа (видео перескочило на начало)
+    if (t + 0.15 < runtime.final.lastVideoT) {
+      runtime.final.ballsStarted = false;
+      runtime.final.hintShown = false;
+      runtime.final.hintAt = 5.5 + Math.random() * 4.5;
+      finalHardClearBalls();
+      finalHideHint();
+    }
+    runtime.final.lastVideoT = t;
+
+    // старт шаров через 3 секунды после старта видео
+    if (!runtime.final.ballsStarted && t >= 3.0) {
+      runtime.final.ballsStarted = true;
+      runtime.final.ballsFade01 = 1;
+      runtime.final.fadeMode = 0;
+      finalSpawnBalls(50);
+      finalHideHint();
+      runtime.final.hintAt = t + 2.0 + Math.random() * 3.5;
+      runtime.final.hintShown = false;
+    }
+
+    // подсказка (рандомно по времени, поверх шаров)
+    if (runtime.final.ballsStarted && !runtime.final.hintShown && t >= runtime.final.hintAt) {
+      runtime.final.hintShown = true;
+      finalShowHint();
+    }
+
+    // physics
+    finalUpdateBalls(dt);
+    finalDraw();
+
+    runtime.final.raf = requestAnimationFrame(finalTick);
+  }
+
+  function finalShowHint() {
+    if (!runtime.final || !runtime.final.hintEl) return;
+    runtime.final.hintEl.classList.add('finalHint--show');
+  }
+
+  function finalHideHint() {
+    if (!runtime.final || !runtime.final.hintEl) return;
+    runtime.final.hintEl.classList.remove('finalHint--show');
+  }
+
+  function finalRestartSequence() {
+    if (!runtime.final) return;
+
+    finalFadeOutBalls();
+
+    var v = runtime.final.videoEl;
+    if (v) {
+      try { v.currentTime = 0; } catch (e) {}
+      v.play().catch(function(){});
+    }
+
+    runtime.final.ballsStarted = false;
+    runtime.final.hintShown = false;
+    finalHideHint();
+  }
+
+  function finalFadeOutBalls() {
+    if (!runtime.final) return;
+    runtime.final.fadeMode = 1;
+  }
+
+  function finalHardClearBalls() {
+    if (!runtime.final) return;
+    runtime.final.balls = [];
+    runtime.final.ballsFade01 = 1;
+    runtime.final.fadeMode = 0;
+  }
+
+  function finalSpawnBalls(count) {
+    if (!runtime.final) return;
+
+    var canvas = runtime.final.canvasEl;
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width;
+    var h = rect.height;
+
+    var baseR = Math.sqrt((w * h) / (count * Math.PI)) * 0.72;
+    if (!isFinite(baseR)) baseR = 26;
+    baseR = clamp(baseR, 14, 54);
+
+    var balls = [];
+    for (var i = 0; i < count; i++) {
+      var rr = baseR * (0.75 + Math.random() * 0.55);
+
+      balls.push({
+        id: i + 1,
+        r: rr,
+        x: Math.random() * w,
+        y: -Math.random() * (h * 0.9) - rr - 10,
+        vx: (Math.random() * 2 - 1) * 90,
+        vy: Math.random() * 20,
+        hue: Math.floor(Math.random() * 360)
+      });
+    }
+
+    runtime.final.balls = balls;
+  }
+
+  function finalUpdateBalls(dt) {
+    if (!runtime.final) return;
+
+    // fade-out (растворение шаров)
+    if (runtime.final.fadeMode === 1) {
+      runtime.final.ballsFade01 -= dt / 0.35;
+      if (runtime.final.ballsFade01 <= 0) {
+        runtime.final.ballsFade01 = 0;
+        runtime.final.fadeMode = 0;
+        runtime.final.balls = [];
+      }
+    } else {
+      runtime.final.ballsFade01 = 1;
+    }
+
+    var balls = runtime.final.balls;
+    if (!balls || balls.length === 0) return;
+
+    var canvas = runtime.final.canvasEl;
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width;
+    var h = rect.height;
+
+    var g = 2400; // “легкие, но ощутимые”
+    var air = 0.992;
+    var bounce = 0.62;
+    var groundFriction = 0.985;
+
+    // substeps для стабильности
+    var steps = Math.max(1, Math.ceil(dt / 0.016));
+    var subDt = dt / steps;
+
+    for (var s = 0; s < steps; s++) {
+      // integrate
+      for (var i = 0; i < balls.length; i++) {
+        var b = balls[i];
+
+        b.vy += g * subDt;
+
+        b.vx *= air;
+        b.vy *= air;
+
+        b.x += b.vx * subDt;
+        b.y += b.vy * subDt;
+
+        // walls
+        if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx) * bounce; }
+        if (b.x + b.r > w) { b.x = w - b.r; b.vx = -Math.abs(b.vx) * bounce; }
+
+        // floor / ceiling
+        if (b.y + b.r > h) {
+          b.y = h - b.r;
+          b.vy = -Math.abs(b.vy) * bounce;
+          b.vx *= groundFriction;
+        }
+        if (b.y - b.r < 0) {
+          b.y = b.r;
+          b.vy = Math.abs(b.vy) * bounce;
+        }
+      }
+
+      // collisions O(n^2) (50 шаров норм)
+      for (var a = 0; a < balls.length; a++) {
+        for (var c = a + 1; c < balls.length; c++) {
+          var A = balls[a];
+          var B = balls[c];
+
+          var dx = B.x - A.x;
+          var dy = B.y - A.y;
+          var dist2 = dx*dx + dy*dy;
+          var minD = A.r + B.r;
+
+          if (dist2 <= 0 || dist2 >= minD*minD) continue;
+
+          var dist = Math.sqrt(dist2) || 0.0001;
+          var nx = dx / dist;
+          var ny = dy / dist;
+
+          // раздвигаем
+          var overlap = (minD - dist);
+          var push = overlap * 0.52;
+          A.x -= nx * push;
+          A.y -= ny * push;
+          B.x += nx * push;
+          B.y += ny * push;
+
+          // импульс (упруго)
+          var rvx = B.vx - A.vx;
+          var rvy = B.vy - A.vy;
+          var velAlong = rvx * nx + rvy * ny;
+          if (velAlong > 0) continue;
+
+          var j = -(1.0 + 0.72) * velAlong;
+          j *= 0.5;
+
+          A.vx -= j * nx;
+          A.vy -= j * ny;
+          B.vx += j * nx;
+          B.vy += j * ny;
+        }
+      }
+    }
+  }
+
+  function finalDraw() {
+    if (!runtime.final) return;
+
+    var ctx = runtime.final.ctx;
+    var canvas = runtime.final.canvasEl;
+    if (!ctx || !canvas) return;
+
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width;
+    var h = rect.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    var balls = runtime.final.balls;
+    if (!balls || balls.length === 0) return;
+
+    var a01 = clamp01(runtime.final.ballsFade01);
+
+    for (var i = 0; i < balls.length; i++) {
+      var b = balls[i];
+
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+
+      ctx.fillStyle = 'hsla(' + b.hue + ', 85%, 62%, ' + (0.72 * a01) + ')';
+      ctx.fill();
+
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.22 * a01) + ')';
+      ctx.stroke();
+    }
+  }
+  
   // ===== Q3 timer =====
 
   function startQ3TimerIfNeeded() {
@@ -1105,6 +1472,21 @@ function moveNoButton(isFirstNudge) {
     }
   }
 
+    var resetBound = false;
+
+  function setupGlobalResetOnce() {
+    if (resetBound) return;
+    resetBound = true;
+
+    var btn = document.getElementById('globalReset');
+    if (!btn) return;
+
+    btn.addEventListener('click', function () {
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+      location.reload();
+    });
+  }
+  
   // ===== Utils =====
 
   function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
