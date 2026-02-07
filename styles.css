@@ -535,7 +535,7 @@ html, body{
   font-size: 22px;
   padding: 16px 18px;
   position: absolute;
-  transition: left 420ms ease, top 420ms ease, transform 160ms ease; /* плавнее */ /* [web:318] */
+  transition: left 180ms ease-out, top 180ms ease-out, transform 120ms ease;
   will-change: left, top;
 }
 
