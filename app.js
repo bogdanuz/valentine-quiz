@@ -725,32 +725,6 @@
   // Стартовые позиции (ДА и НЕТ рядом по центру)
   setInitialClimaxPositions();
   keepNoInCentralBounds();
-
-  // 1) Первый “толчок” — на первое движение указателя по АРЕНЕ (и мышью, и pointer)
-  runtime.climax.firstNudgeDone = false;
-  runtime.climax.onFirstNudge = function () {
-    if (runtime.climax.firstNudgeDone) return;
-    runtime.climax.firstNudgeDone = true;
-    moveNoButton(true);
-  };
-  runtime.climax.firstNudgeHost = arena;
-  arena.addEventListener('pointermove', runtime.climax.onFirstNudge, { passive: true });
-  arena.addEventListener('mousemove', runtime.climax.onFirstNudge, { passive: true });
-
-  // 2) Дальше “НЕТ” убегает только при попытке навести/нажать на неё
-  runtime.climax.onNoRun = function (ev) {
-    if (ev && ev.preventDefault) ev.preventDefault();
-    moveNoButton(false);
-  };
-
-  noBtn.addEventListener('pointerenter', runtime.climax.onNoRun);
-  noBtn.addEventListener('pointerdown', runtime.climax.onNoRun);
-  noBtn.addEventListener('mouseenter', runtime.climax.onNoRun);
-  noBtn.addEventListener('mousedown', runtime.climax.onNoRun);
-
-  // Resize: всегда держим “НЕТ” в центральной зоне
-  runtime.climax.onResize = function () {
-    keepNoInCentralBounds();
   };
   window.addEventListener('resize', runtime.climax.onResize);
 }
@@ -850,11 +824,6 @@ keepNoInCentralBounds();
 }
 
     window.addEventListener('resize', runtime.climax.onResize);
-
-    // Стартовая “аккуратная” позиция внутри арены
-    requestAnimationFrame(function () {
-      keepNoInBounds();
-    });
   }
 
   function teardownClimaxRuntime() {
@@ -895,26 +864,6 @@ keepNoInCentralBounds();
   runtime.climax.noBtn = null;
   runtime.climax.onResize = null;
 }
-  
-  function keepNoInBounds() {
-    var arena = runtime.climax.arenaEl;
-    var noBtn = runtime.climax.noBtn;
-    if (!arena || !noBtn) return;
-
-    var a = arena.getBoundingClientRect();
-    var n = noBtn.getBoundingClientRect();
-
-    var left = parseFloat(noBtn.style.left || '0');
-    var top = parseFloat(noBtn.style.top || '0');
-
-    // Если left/top ещё не заданы (NaN) — ставим “нормально” справа внизу
-    if (!isFinite(left) || !isFinite(top)) {
-      left = Math.max(8, Math.min(a.width - n.width - 8, a.width * 0.55));
-      top = Math.max(8, Math.min(a.height - n.height - 8, a.height * 0.62));
-    } else {
-      left = clamp(left, 8, Math.max(8, a.width - n.width - 8));
-      top = clamp(top, 8, Math.max(8, a.height - n.height - 8));
-    }
 
     noBtn.style.left = Math.round(left) + 'px';
     noBtn.style.top = Math.round(top) + 'px';
