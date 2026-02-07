@@ -176,6 +176,12 @@ html, body{
   font-size: 30px;
   line-height: 1.18;
   letter-spacing: 0.01em;
+  animation: prologueCardIn 280ms ease both;
+}
+
+@keyframes prologueCardIn{
+  from{ opacity: 0; transform: translateY(10px) scale(0.99); }
+  to{ opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .prologueSpacerMid{
