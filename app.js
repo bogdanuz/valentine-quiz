@@ -1081,20 +1081,7 @@ function moveNoButton(isFirstNudge) {
 
   runtime.final.raf = requestAnimationFrame(finalTick);
 }
-
-    // autoplay (без звука — muted already)
-    video.muted = true;
-    video.loop = true;
-    video.play().catch(function(){});
-
-    finalResizeCanvas();
-
-    runtime.final.lastMs = performance.now();
-    runtime.final.lastVideoT = 0;
-
-    runtime.final.raf = requestAnimationFrame(finalTick);
-  }
-
+  
   function teardownFinalRuntime() {
   if (!runtime.final) return;
 
