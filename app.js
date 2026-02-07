@@ -1248,12 +1248,10 @@ function triggerEasterFromFinal(ball) {
   var w = rect.width;
   var h = rect.height;
 
-  // радиус под экран
   var baseR = Math.min(w, h) * 0.16;
   if (!isFinite(baseR)) baseR = 120;
   baseR = clamp(baseR, 70, 260);
 
-  // ВАЖНО: теперь не создаём 50 штук сразу — только готовим "план спавна"
   runtime.final.balls = [];
   runtime.final.spawn = {
     total: count,
@@ -1261,7 +1259,7 @@ function triggerEasterFromFinal(ball) {
     baseR: baseR,
     w: w,
     h: h,
-    nextIn: 0.20 + Math.random() * 0.35  // через сколько секунд первая пачка
+    nextIn: 0.15 + Math.random() * 0.25  // быстрее начинаем
   };
 }
 
@@ -1289,62 +1287,70 @@ function finalUpdateBalls(dt) {
   var w = rect.width;
   var h = rect.height;
 
-  // --- 1) Постепенный спавн пачками 3–5 шаров ---
+  // --- Постепенный спавн ---
   if (!runtime.final.spawn) {
-    // если вдруг spawn не задан (на всякий случай)
-    runtime.final.spawn = { total: 0, spawned: 0, baseR: Math.min(w, h) * 0.16, w: w, h: h, nextIn: 999 };
+    runtime.final.spawn = { 
+      total: 0, spawned: 0, baseR: Math.min(w, h) * 0.16, 
+      w: w, h: h, nextIn: 999 
+    };
   }
 
   runtime.final.spawn.w = w;
   runtime.final.spawn.h = h;
 
   runtime.final.spawn.nextIn -= dt;
-  if (runtime.final.spawn.nextIn <= 0 && runtime.final.spawn.spawned < runtime.final.spawn.total) {
-    var batch = 3 + Math.floor(Math.random() * 3); // 3..5
+  if (runtime.final.spawn.nextIn <= 0 && 
+      runtime.final.spawn.spawned < runtime.final.spawn.total) {
+    
+    var batch = 2 + Math.floor(Math.random() * 3); // 2-4 штуки
     var left = runtime.final.spawn.total - runtime.final.spawn.spawned;
     if (batch > left) batch = left;
 
     for (var k = 0; k < batch; k++) {
       var baseR = runtime.final.spawn.baseR;
+      var rr = baseR * (0.80 + Math.random() * 0.50); // больше вариации
 
-      // небольшая вариация размера
-      var rr = baseR * (0.85 + Math.random() * 0.45);
-
-      // рандомная позиция по X, шар появляется "за экраном сверху"
-      var x = rr + Math.random() * Math.max(1, (w - rr * 2));
-      var y = -rr - 40 - Math.random() * (h * 0.85);
+      // Спавн ближе к центру для лучшего распределения
+      var centerBias = 0.3;
+      var rx = Math.random();
+      rx = rx < 0.5 
+        ? rx * (1 + centerBias) 
+        : 1 - (1 - rx) * (1 + centerBias);
+      
+      var x = rr + rx * Math.max(1, (w - rr * 2));
+      var y = -rr - 20 - Math.random() * (h * 0.3); // ближе к верху
 
       balls.push({
         id: runtime.final.spawn.spawned + 1,
         r: rr,
         x: x,
         y: y,
-        vx: (Math.random() * 2 - 1) * 10, // лёгкий дрейф
+        vx: (Math.random() * 2 - 1) * 3,  // УМЕНЬШЕНО: лёгкий дрейф
         vy: 0,
-        hue: Math.floor(Math.random() * 360)
+        hue: Math.floor(Math.random() * 360),
+        // для подспущенности: мягкость индивидуальная
+        softness: 0.75 + Math.random() * 0.25
       });
 
       runtime.final.spawn.spawned++;
     }
 
-    // следующая пачка через 0.25–0.75 сек
-    runtime.final.spawn.nextIn = 0.25 + Math.random() * 0.50;
+    runtime.final.spawn.nextIn = 0.20 + Math.random() * 0.35;
   }
 
   if (balls.length === 0) return;
 
-  // --- 2) "Земное" (медленнее в 2 раза) падение + демпфирование ---
-  var g = 820;          // было быстрее — делаем медленнее
-  var air = 0.993;      // сглаживает
-  var bounce = 0.14;    // очень слабый отскок от стен/пола
-  var groundFriction = 0.88;
+  // --- ИСПРАВЛЕНА ФИЗИКА ---
+  var g = 180;          // УМЕНЬШЕНО: медленное падение воздушных шаров
+  var air = 0.975;      // УВЕЛИЧЕНО: сильное сопротивление воздуха
+  var bounce = 0.05;    // УМЕНЬШЕНО: почти нет отскока от стен
+  var groundFriction = 0.92; // больше трения
 
-  // лимиты скорости, чтобы не превращалось в ураган
-  var maxVy = 520;
-  var maxVx = 120;
+  var maxVy = 280;      // УМЕНЬШЕНО: лимит вертикальной скорости
+  var maxVx = 60;       // УМЕНЬШЕНО: лимит горизонтальной
 
-  // substeps
-  var steps = Math.max(1, Math.ceil(dt / 0.016));
+  // УМЕНЬШЕНО до 1-2 substeps для стабильности
+  var steps = Math.max(1, Math.min(2, Math.ceil(dt / 0.020)));
   var subDt = dt / steps;
 
   for (var s = 0; s < steps; s++) {
@@ -1354,9 +1360,11 @@ function finalUpdateBalls(dt) {
 
       b.vy += g * subDt;
 
+      // Сильное демпфирование для мягких шаров
       b.vx *= air;
       b.vy *= air;
 
+      // Клампинг скорости
       if (b.vy > maxVy) b.vy = maxVy;
       if (b.vx > maxVx) b.vx = maxVx;
       if (b.vx < -maxVx) b.vx = -maxVx;
@@ -1364,74 +1372,90 @@ function finalUpdateBalls(dt) {
       b.x += b.vx * subDt;
       b.y += b.vy * subDt;
 
-      // walls
-      if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx) * bounce; }
-      if (b.x + b.r > w) { b.x = w - b.r; b.vx = -Math.abs(b.vx) * bounce; }
+      // walls - мягкие границы
+      if (b.x - b.r < 0) { 
+        b.x = b.r; 
+        b.vx = Math.abs(b.vx) * bounce; 
+        b.vx *= 0.5; // доп. гашение
+      }
+      if (b.x + b.r > w) { 
+        b.x = w - b.r; 
+        b.vx = -Math.abs(b.vx) * bounce;
+        b.vx *= 0.5;
+      }
 
-      // ceiling (редко, но пусть будет)
+      // ceiling
       if (b.y - b.r < 0) {
         b.y = b.r;
         b.vy = Math.abs(b.vy) * bounce;
+        b.vy *= 0.5;
       }
 
-      // floor
+      // floor - сильное успокоение
       if (b.y + b.r > h) {
         b.y = h - b.r;
         b.vy = -Math.abs(b.vy) * bounce;
         b.vx *= groundFriction;
 
-        // успокоение на полу
-        if (Math.abs(b.vy) < 25) b.vy = 0;
-        if (Math.abs(b.vx) < 6) b.vx = 0;
+        // Полная остановка на полу
+        if (Math.abs(b.vy) < 15) b.vy = 0;
+        if (Math.abs(b.vx) < 3) b.vx = 0;
       }
     }
 
-    // --- 3) Столкновения шар-шар: мягко, чтобы "укладывались" без роя ---
-    // 2 итерации решателя — чтобы лучше распирало без вибрации
-    for (var iter = 0; iter < 2; iter++) {
-      for (var a = 0; a < balls.length; a++) {
-        for (var c = a + 1; c < balls.length; c++) {
-          var A = balls[a];
-          var B = balls[c];
+    // --- ИСПРАВЛЕНЫ СТОЛКНОВЕНИЯ: мягкие, без резонанса ---
+    // ТОЛЬКО 1 итерация + мягкая коррекция
+    for (var a = 0; a < balls.length; a++) {
+      for (var c = a + 1; c < balls.length; c++) {
+        var A = balls[a];
+        var B = balls[c];
 
-          var dx = B.x - A.x;
-          var dy = B.y - A.y;
-          var dist2 = dx*dx + dy*dy;
-          var minD = A.r + B.r;
+        var dx = B.x - A.x;
+        var dy = B.y - A.y;
+        var dist2 = dx*dx + dy*dy;
+        var minD = A.r + B.r;
 
-          if (dist2 <= 0 || dist2 >= minD*minD) continue;
+        if (dist2 <= 0 || dist2 >= minD*minD) continue;
 
-          var dist = Math.sqrt(dist2) || 0.0001;
-          var nx = dx / dist;
-          var ny = dy / dist;
+        var dist = Math.sqrt(dist2) || 0.0001;
+        var nx = dx / dist;
+        var ny = dy / dist;
 
-          // позиционная коррекция (чтобы НЕ было "шар в шар")
-          var overlap = (minD - dist);
-          var corr = overlap * 0.52; // половина+чуть, чтобы быстрее разжимались
-          A.x -= nx * corr;
-          A.y -= ny * corr;
-          B.x += nx * corr;
-          B.y += ny * corr;
+        var overlap = (minD - dist);
+        
+        // ИСПРАВЛЕНО: мягкая позиционная коррекция
+        // Используем softness для эффекта "мятости"
+        var avgSoft = (A.softness + B.softness) * 0.5;
+        var corr = overlap * 0.30 * avgSoft; // УМЕНЬШЕНО с 0.52
+        
+        A.x -= nx * corr;
+        A.y -= ny * corr;
+        B.x += nx * corr;
+        B.y += ny * corr;
 
-          // очень маленький "удар" (почти незаметный)
-          var rvx = B.vx - A.vx;
-          var rvy = B.vy - A.vy;
-          var velAlong = rvx * nx + rvy * ny;
-          if (velAlong > 0) continue;
+        // ИСПРАВЛЕНО: минимальная передача импульса
+        var rvx = B.vx - A.vx;
+        var rvy = B.vy - A.vy;
+        var velAlong = rvx * nx + rvy * ny;
+        
+        if (velAlong > 0) continue;
 
-          var restitution = 0.06; // крохотный отскок
-          var j = -(1.0 + restitution) * velAlong;
-          j *= 0.22;
+        // Почти нулевой отскок - шары "липнут"
+        var restitution = 0.02 * avgSoft; // УМЕНЬШЕНО с 0.06
+        var j = -(1.0 + restitution) * velAlong;
+        j *= 0.08; // УМЕНЬШЕНО с 0.22 - ключевое исправление!
 
-          A.vx -= j * nx;
-          A.vy -= j * ny;
-          B.vx += j * nx;
-          B.vy += j * ny;
+        A.vx -= j * nx * 0.5; // делим на 2 для равной массы
+        A.vy -= j * ny * 0.5;
+        B.vx += j * nx * 0.5;
+        B.vy += j * ny * 0.5;
 
-          // гасим дрожание после контакта
-          A.vx *= 0.985; A.vy *= 0.985;
-          B.vx *= 0.985; B.vy *= 0.985;
-        }
+        // УСИЛЕНО: сильное гашение после контакта
+        var contactDamp = 0.92; // было 0.985
+        A.vx *= contactDamp; 
+        A.vy *= contactDamp;
+        B.vx *= contactDamp; 
+        B.vy *= contactDamp;
       }
     }
   }
