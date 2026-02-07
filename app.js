@@ -1,38 +1,86 @@
 (function () {
   'use strict';
 
-  // ТЗ: localStorage, 1 ключ
+  // =========================
+  // Константы ТЗ (не менять)
+  // =========================
+
   var STORAGE_KEY = 'valentine_state_v1';
   var APP_VERSION = 'v1';
 
-  // Зафиксированные тексты (копируем из ТЗ, не меняя ни символа)
-  var TXT = {
+  // Зафиксированные тексты (раздел 1 ТЗ) — НЕ МЕНЯТЬ НИ СИМВОЛА
+  var FIXED = {
     PROLOGUE: 'Добро пожаловать, Анастасия, в самый валентиновый из всех святых и самый святой из всех валентиновых квизов совместимости.',
     CLIMAX_Q: 'Будете ли Вы моей Валентинкой?',
     FINAL_PHRASE: 'С праздником, роднуля! Я тебя люблю!',
     EASTER_HINT: 'Псс… нажмите 3 раза на любой шар.',
-    MEM_COMPLIMENT: 'Ты — мой личный сорт героина',
-    WRONG_POPUP: 'Ой ой ой, ошибОчка… Попробуй ещё раз',
-    START_BTN: 'Начать'
+    MEM_COMPLIMENT: 'Ты — мой личный сорт героина'
   };
 
-  // Single source of truth — единый объект состояния
+  // Нефиксированные, но нужные UI-строки (ТЗ задаёт точные тексты для части кнопок/попапов)
+  var UI = {
+    START_BTN: 'Начать',
+    TRY_AGAIN_POPUP_TEXT: 'Ой ой ой, ошибОчка… Попробуй ещё раз',
+    TRY_AGAIN_BTN: 'Ещё раз'
+  };
+
+  // Пути ассетов (ТЗ, раздел 7)
+  var ASSETS = {
+    audioMusic: 'assets/audio/music.mp3',
+    videoMp4: 'assets/video/valentine.mp4',
+    videoWebm: 'assets/video/valentine.webm',
+
+    imgEdward: 'assets/img/quiz/edward.png',
+    imgTwilightFrame: 'assets/img/quiz/twilight-frame.webp',
+    imgDogQ3: 'assets/img/quiz/millionaire-dog.jpg',
+    imgNerpaHead: 'assets/img/easter/nerpa-dog-head.png',
+    imgHeartBall: 'assets/img/fx/heart-ball.png'
+  };
+
+  // Тайминги (будем использовать в следующих стадиях; здесь — заготовка без “магии”)
+  var T = {
+    BASE_TRANSITION_MS: 280
+  };
+
+  // =========================
+  // State (single source of truth)
+  // =========================
+
   var state = getDefaultState();
+
+  // =========================
+  // DOM
+  // =========================
 
   var appEl = document.getElementById('app');
 
   init();
 
   function init() {
-    var loaded = loadState();
-    if (loaded) state = loaded;
+    var restored = loadState();
+    if (restored) state = restored;
 
-    // На стадии 0 показываем минимальный каркас: стартовый экран с кнопкой "Начать"
-    // (Дальше в стадиях переключим старт на LOADING по ТЗ)
+    ensureRoot();
+
+    // На Стадии 1 оставляем START как главный экран для проверки деплоя.
+    // (В Стадии 2 сделаем LOADING + реальную предзагрузку и авто-переход.)
     if (!state.screenId) state.screenId = 'start';
 
     renderScreen();
-    saveState();
+
+    // Debug (только если ?dev=1)
+    if (isDev()) {
+      window.__valentineDebug = {
+        getState: function(){ return state; },
+        goToScreen: goToScreen,
+        saveState: saveState,
+        resetState: function(){
+          state = getDefaultState();
+          saveState();
+          renderScreen();
+        }
+      };
+    }
   }
 
   function getDefaultState() {
@@ -63,15 +111,17 @@
     };
   }
 
-  // loadState/saveState — через JSON stringify/parse (localStorage хранит строку)
+  // =========================
+  // Storage
+  // =========================
+
   function loadState() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
+
       var parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return null;
-
-      // минимальная защита от старого/битого состояния
       if (parsed.appVersion !== APP_VERSION) return null;
 
       return parsed;
@@ -89,51 +139,123 @@
     }
   }
 
-  // Экранная машина — явный переход
+  // =========================
+  // Screen machine
+  // =========================
+
   function goToScreen(screenId) {
+    // enum {loading,start,prologue,quiz,result,climax,final}
+    var ok =
+      screenId === 'loading' ||
+      screenId === 'start' ||
+      screenId === 'prologue' ||
+      screenId === 'quiz' ||
+      screenId === 'result' ||
+      screenId === 'climax' ||
+      screenId === 'final';
+
+    if (!ok) {
+      console.warn('Unknown screenId:', screenId);
+      return;
+    }
+
+    if (state.screenId === screenId) return;
+
     state.screenId = screenId;
     saveState();
     renderScreen();
   }
 
-  function renderScreen() {
+  function ensureRoot() {
     if (!appEl) return;
 
-    // минимальная разметка сцены 16:9
     appEl.innerHTML = ''
       + '<div class="stage" role="application">'
-      + '  <div class="safe" id="safe"></div>'
+      + '  <div class="safe" id="safeRoot"></div>'
+      + '  <div class="overlay" id="overlay" aria-hidden="true"></div>'
       + '</div>';
+  }
 
-    var safe = document.getElementById('safe');
+  function renderScreen() {
+    var safeRoot = document.getElementById('safeRoot');
+    if (!safeRoot) return;
 
+    // Чистим текущий экран
+    safeRoot.innerHTML = '';
+
+    // Рендерим новый экран
+    var screenEl = document.createElement('div');
+    screenEl.className = 'screen';
+    screenEl.setAttribute('data-screen', state.screenId);
+
+    // Важно: START по ТЗ — только фон + кнопка “Начать”, больше текста нет.
     if (state.screenId === 'start') {
-      safe.innerHTML = ''
-        + '<button class="btn" id="startBtn" type="button">'
-        + escapeHtml(TXT.START_BTN)
-        + '</button>';
+      var wrap = document.createElement('div');
+      wrap.className = 'centerStack';
 
-      var btn = document.getElementById('startBtn');
+      var btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.type = 'button';
+      btn.id = 'startBtn';
+      btn.textContent = UI.START_BTN;
+
+      // На Стадии 1 — только “живость” кнопки.
+      // Музыка строго по клику реализуем в Стадии 3 (через HTMLMediaElement.play()) [web:17].
       btn.addEventListener('click', function () {
-        // На стадии 0 просто фиксируем, что клик был (музыку/переходы — на Стадии 3)
-        // Оставляем на start, чтобы не “симулировать” будущую логику.
+        // Ничего не запускаем, чтобы не “опережать” Стадию 3.
         saveState();
       });
-      return;
+
+      wrap.appendChild(btn);
+      screenEl.appendChild(wrap);
+    } else {
+      // Остальные экраны — пустые заглушки на Стадии 1 (без фикс-текстов/логики).
+      // Управление ими начнём в следующих стадиях.
+      screenEl.appendChild(document.createElement('div'));
     }
 
-    // На стадии 0 другие экраны не реализуем — оставим нейтральную пустоту
-    safe.innerHTML = '';
+    safeRoot.appendChild(screenEl);
+
+    // Плавный enter: включаем активный класс на следующем кадре
+    // (requestAnimationFrame вызывает callback перед следующим repaint) [web:21].
+    requestAnimationFrame(function () {
+      screenEl.classList.add('screen--active');
+    });
   }
 
-  function escapeHtml(s) {
-    return String(s)
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
+  function isDev() {
+    return new URLSearchParams(location.search).get('dev') === '1';
   }
 
-  // Экспорт в window не делаем (но и ES-модулей нет) — всё в одном файле.
+  // =========================
+  // Заготовки под ТЗ (пока не используем)
+  // =========================
+
+  function preloadAssets(onProgress) {
+    // Реальная предзагрузка + прогресс будет в Стадии 2.
+    // Здесь оставляем сигнатуру под ТЗ.
+    void onProgress;
+    return Promise.resolve();
+  }
+
+  function showToast(text) {
+    void text;
+  }
+
+  function showModal(text, buttonText, onClose) {
+    void text; void buttonText; void onClose;
+  }
+
+  function selectAnswer(questionIndex, answerIndex) {
+    void questionIndex; void answerIndex;
+  }
+
+  function validate(questionIndex) {
+    void questionIndex;
+    return false;
+  }
+
+  function startFinalTimeline() {
+    // Видео + шары + пасхалка — будет в Стадиях 8–9.
+  }
 })();
