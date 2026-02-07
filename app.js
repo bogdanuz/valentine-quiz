@@ -17,11 +17,10 @@
     MEM_COMPLIMENT: 'Ты — мой личный сорт героина'
   };
 
-  // Нефиксированные, но нужные UI-строки (ТЗ задаёт точные тексты для части кнопок/попапов)
+  // Нефиксированные, но нужные UI-строки
   var UI = {
     START_BTN: 'Начать',
-    TRY_AGAIN_POPUP_TEXT: 'Ой ой ой, ошибОчка… Попробуй ещё раз',
-    TRY_AGAIN_BTN: 'Ещё раз'
+    LOADING_A11Y: 'Загрузка…'
   };
 
   // Пути ассетов (ТЗ, раздел 7)
@@ -37,7 +36,7 @@
     imgHeartBall: 'assets/img/fx/heart-ball.png'
   };
 
-  // Тайминги (будем использовать в следующих стадиях; здесь — заготовка без “магии”)
+  // Тайминги (только из ТЗ/стадий; “магии” без нужды не добавляем)
   var T = {
     BASE_TRANSITION_MS: 280
   };
@@ -47,6 +46,17 @@
   // =========================
 
   var state = getDefaultState();
+
+  // Runtime (не сохраняем в localStorage)
+  var runtime = {
+    preloadStarted: false,
+    preloadDone: false,
+    preloadFailed: false,
+
+    target01: 0,     // 0..1
+    shown01: 0,      // 0..1 (кинетик сглаживание)
+    rafId: 0
+  };
 
   // =========================
   // DOM
@@ -62,13 +72,11 @@
 
     ensureRoot();
 
-    // На Стадии 1 оставляем START как главный экран для проверки деплоя.
-    // (В Стадии 2 сделаем LOADING + реальную предзагрузку и авто-переход.)
-    if (!state.screenId) state.screenId = 'start';
+    // На Стадии 2 стартуем с LOADING (если нет восстановленного экрана)
+    if (!state.screenId) state.screenId = 'loading';
 
     renderScreen();
 
-    // Debug (только если ?dev=1)
     if (isDev()) {
       window.__valentineDebug = {
         getState: function(){ return state; },
@@ -77,6 +85,11 @@
         resetState: function(){
           state = getDefaultState();
           saveState();
+          runtime.preloadStarted = false;
+          runtime.preloadDone = false;
+          runtime.preloadFailed = false;
+          runtime.target01 = 0;
+          runtime.shown01 = 0;
           renderScreen();
         }
       };
@@ -86,7 +99,7 @@
   function getDefaultState() {
     return {
       appVersion: APP_VERSION,
-      screenId: 'start', // enum {loading,start,prologue,quiz,result,climax,final}
+      screenId: 'loading', // enum {loading,start,prologue,quiz,result,climax,final}
       prologueScrollDone: false,
       quiz: {
         currentQuestion: 1,
@@ -144,7 +157,6 @@
   // =========================
 
   function goToScreen(screenId) {
-    // enum {loading,start,prologue,quiz,result,climax,final}
     var ok =
       screenId === 'loading' ||
       screenId === 'start' ||
@@ -180,15 +192,40 @@
     var safeRoot = document.getElementById('safeRoot');
     if (!safeRoot) return;
 
-    // Чистим текущий экран
     safeRoot.innerHTML = '';
 
-    // Рендерим новый экран
     var screenEl = document.createElement('div');
     screenEl.className = 'screen';
     screenEl.setAttribute('data-screen', state.screenId);
 
-    // Важно: START по ТЗ — только фон + кнопка “Начать”, больше текста нет.
+    if (state.screenId === 'loading') {
+      screenEl.appendChild(renderLoading());
+      safeRoot.appendChild(screenEl);
+
+      requestAnimationFrame(function () {
+        screenEl.classList.add('screen--active');
+      });
+
+      // Стартуем предзагрузку ровно один раз на заход в LOADING
+      if (!runtime.preloadStarted) {
+        runtime.preloadStarted = true;
+        startLoadingLoop();
+
+        preloadAssets(function (p01) {
+          runtime.target01 = clamp01(p01);
+        }).then(function () {
+          runtime.preloadDone = true;
+          runtime.target01 = 1;
+        }).catch(function (e) {
+          runtime.preloadFailed = true;
+          console.error('Preload failed:', e);
+          runtime.target01 = runtime.target01; // оставим как есть
+        });
+      }
+
+      return;
+    }
+
     if (state.screenId === 'start') {
       var wrap = document.createElement('div');
       wrap.className = 'centerStack';
@@ -199,63 +236,243 @@
       btn.id = 'startBtn';
       btn.textContent = UI.START_BTN;
 
-      // На Стадии 1 — только “живость” кнопки.
-      // Музыка строго по клику реализуем в Стадии 3 (через HTMLMediaElement.play()) [web:17].
+      // На Стадии 2 клик не запускает музыку (строго по ТЗ — Стадия 3).
       btn.addEventListener('click', function () {
-        // Ничего не запускаем, чтобы не “опережать” Стадию 3.
         saveState();
       });
 
       wrap.appendChild(btn);
       screenEl.appendChild(wrap);
-    } else {
-      // Остальные экраны — пустые заглушки на Стадии 1 (без фикс-текстов/логики).
-      // Управление ими начнём в следующих стадиях.
-      screenEl.appendChild(document.createElement('div'));
+      safeRoot.appendChild(screenEl);
+
+      requestAnimationFrame(function () {
+        screenEl.classList.add('screen--active');
+      });
+
+      stopLoadingLoop();
+      return;
     }
 
+    // Заглушки остальных экранов пока не реализуем
+    screenEl.appendChild(document.createElement('div'));
     safeRoot.appendChild(screenEl);
 
-    // Плавный enter: включаем активный класс на следующем кадре
-    // (requestAnimationFrame вызывает callback перед следующим repaint) [web:21].
     requestAnimationFrame(function () {
       screenEl.classList.add('screen--active');
     });
+
+    stopLoadingLoop();
+  }
+
+  function renderLoading() {
+    var wrap = document.createElement('div');
+    wrap.className = 'loadingWrap';
+    wrap.setAttribute('aria-label', UI.LOADING_A11Y);
+
+    wrap.innerHTML = ''
+      + '<svg class="loadingHeart" viewBox="0 0 100 90" role="img" aria-label="Прогресс загрузки">'
+      + '  <defs>'
+      + '    <clipPath id="heartClip">'
+      + '      <path d="M50 84 C30 68, 10 52, 10 32 C10 18, 20 8, 34 8 C42 8, 48 12, 50 18 C52 12, 58 8, 66 8 C80 8, 90 18, 90 32 C90 52, 70 68, 50 84 Z"></path>'
+      + '    </clipPath>'
+      + '    <linearGradient id="fillGrad" x1="0" x2="0" y1="1" y2="0">'
+      + '      <stop offset="0%" stop-color="#ff2a5d"></stop>'
+      + '      <stop offset="100%" stop-color="#ff5b8a"></stop>'
+      + '    </linearGradient>'
+      + '  </defs>'
+      + '  <rect id="heartFillRect" x="0" y="90" width="100" height="0" fill="url(#fillGrad)" clip-path="url(#heartClip)"></rect>'
+      + '  <path d="M50 84 C30 68, 10 52, 10 32 C10 18, 20 8, 34 8 C42 8, 48 12, 50 18 C52 12, 58 8, 66 8 C80 8, 90 18, 90 32 C90 52, 70 68, 50 84 Z"'
+      + '        fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.42)" stroke-width="2"></path>'
+      + '  <path d="M26 18 C28 14, 32 12, 36 12" stroke="rgba(255,255,255,0.18)" stroke-width="3" stroke-linecap="round"></path>'
+      + '</svg>'
+      + '<div class="loadingPercent" id="loadingPercent">0%</div>';
+
+    return wrap;
+  }
+
+  // =========================
+  // Preload (реальный)
+  // =========================
+
+  function preloadAssets(onProgress01) {
+    var urls = [
+      ASSETS.audioMusic,
+      ASSETS.videoMp4,
+      ASSETS.videoWebm,
+      ASSETS.imgEdward,
+      ASSETS.imgTwilightFrame,
+      ASSETS.imgDogQ3,
+      ASSETS.imgNerpaHead,
+      ASSETS.imgHeartBall
+    ];
+
+    var items = urls.map(function (url) {
+      return { url: url, loaded: 0, total: 0, known: false, done: false };
+    });
+
+    function update() {
+      var n = items.length;
+      var sum = 0;
+
+      for (var i = 0; i < n; i++) {
+        var it = items[i];
+        var ratio = 0;
+
+        if (it.known && it.total > 0) {
+          ratio = it.loaded / it.total;
+        } else {
+          ratio = it.done ? 1 : 0;
+        }
+
+        sum += clamp01(ratio);
+      }
+
+      onProgress01(sum / n);
+    }
+
+    update();
+
+    var tasks = items.map(function (it) {
+      return fetchWithProgress(it.url, function (loaded, total, known) {
+        it.loaded = loaded;
+        it.total = total;
+        it.known = known;
+        update();
+      }).then(function () {
+        it.done = true;
+        update();
+      });
+    });
+
+    return Promise.all(tasks).then(function () {
+      onProgress01(1);
+    });
+  }
+
+  function fetchWithProgress(url, onItemProgress) {
+    return fetch(url, { cache: 'force-cache' }).then(function (resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status + ' for ' + url);
+
+      var body = resp.body;
+      var lenHeader = resp.headers.get('Content-Length');
+      var total = lenHeader ? parseInt(lenHeader, 10) : 0;
+      var known = !!(total && total > 0);
+
+      // Если поток недоступен — просто дожидаемся полной загрузки
+      if (!body || !body.getReader) {
+        return resp.arrayBuffer().then(function (buf) {
+          var size = known ? total : (buf ? buf.byteLength : 0);
+          onItemProgress(size, size, known || !!size);
+        });
+      }
+
+      var reader = body.getReader();
+      var loaded = 0;
+
+      onItemProgress(0, total, known);
+
+      function readNext() {
+        return reader.read().then(function (res) {
+          if (res.done) {
+            // Если total неизвестен, считаем total=loaded для корректного 100%
+            onItemProgress(loaded, known ? total : loaded, known);
+            return;
+          }
+
+          var chunk = res.value;
+          loaded += chunk.byteLength;
+
+          onItemProgress(loaded, total, known);
+
+          // Не сохраняем chunk — просто “съедаем” поток, чтобы файл реально скачался
+          return readNext();
+        });
+      }
+
+      return readNext();
+    });
+  }
+
+  // =========================
+  // LOADING loop (кинетик прогресса)
+  // =========================
+
+  function startLoadingLoop() {
+    if (runtime.rafId) return;
+
+    function tick() {
+      if (state.screenId !== 'loading') {
+        runtime.rafId = 0;
+        return;
+      }
+
+      // “Кинематик”: сглаживаем отображаемый прогресс к целевому
+      runtime.shown01 = runtime.shown01 + (runtime.target01 - runtime.shown01) * 0.14;
+
+      // Если предзагрузка завершена — даём дойти до 100% и переходим
+      if (runtime.preloadDone && runtime.shown01 > 0.999) {
+        runtime.shown01 = 1;
+        renderLoadingUI(1);
+
+        // Авто-переход на START на 100%
+        if (state.screenId === 'loading') {
+          goToScreen('start');
+        }
+
+        runtime.rafId = 0;
+        return;
+      }
+
+      renderLoadingUI(runtime.shown01);
+
+      runtime.rafId = requestAnimationFrame(tick);
+    }
+
+    runtime.rafId = requestAnimationFrame(tick);
+  }
+
+  function stopLoadingLoop() {
+    if (runtime.rafId) {
+      cancelAnimationFrame(runtime.rafId);
+      runtime.rafId = 0;
+    }
+  }
+
+  function renderLoadingUI(p01) {
+    var percentEl = document.getElementById('loadingPercent');
+    var rect = document.getElementById('heartFillRect');
+
+    if (percentEl) {
+      percentEl.textContent = Math.round(clamp01(p01) * 100) + '%';
+    }
+
+    if (rect) {
+      // rect заполняем снизу вверх: y уменьшается, height растёт
+      var h = clamp01(p01) * 90;
+      var y = 90 - h;
+      rect.setAttribute('y', String(y));
+      rect.setAttribute('height', String(h));
+    }
+  }
+
+  // =========================
+  // Utils
+  // =========================
+
+  function clamp01(x) {
+    if (x < 0) return 0;
+    if (x > 1) return 1;
+    return x;
   }
 
   function isDev() {
     return new URLSearchParams(location.search).get('dev') === '1';
   }
 
-  // =========================
-  // Заготовки под ТЗ (пока не используем)
-  // =========================
-
-  function preloadAssets(onProgress) {
-    // Реальная предзагрузка + прогресс будет в Стадии 2.
-    // Здесь оставляем сигнатуру под ТЗ.
-    void onProgress;
-    return Promise.resolve();
-  }
-
-  function showToast(text) {
-    void text;
-  }
-
-  function showModal(text, buttonText, onClose) {
-    void text; void buttonText; void onClose;
-  }
-
-  function selectAnswer(questionIndex, answerIndex) {
-    void questionIndex; void answerIndex;
-  }
-
-  function validate(questionIndex) {
-    void questionIndex;
-    return false;
-  }
-
-  function startFinalTimeline() {
-    // Видео + шары + пасхалка — будет в Стадиях 8–9.
-  }
+  // Заготовки под следующие стадии (сейчас не используем)
+  function showToast(text) { void text; }
+  function showModal(text, buttonText, onClose) { void text; void buttonText; void onClose; }
+  function selectAnswer(questionIndex, answerIndex) { void questionIndex; void answerIndex; }
+  function validate(questionIndex) { void questionIndex; return false; }
+  function startFinalTimeline() {}
 })();
