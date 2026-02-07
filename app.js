@@ -870,39 +870,85 @@ function moveNoButton(isFirstNudge) {
   var yesCx = (y.left - a.left) + y.width / 2;
   var yesCy = (y.top  - a.top) + y.height / 2;
 
-  // Центр "НЕТ" в координатах арены (из curLeft/curTop)
+  // Границы 20–80% (для left/top)
+  var leftMin = (a.width - n.width) * 0.20;
+  var leftMax = (a.width - n.width) * 0.80;
+  var topMin  = (a.height - n.height) * 0.20;
+  var topMax  = (a.height - n.height) * 0.80;
+
+  function clampLocal(v, mn, mx) { return v < mn ? mn : (v > mx ? mx : v); }
+
+  // Случайная добавка (всегда определена, это фиксит твою ошибку)
+  var jitter = (isFirstNudge === true) ? 18 : 44;
+  var jx = (Math.random() * 2 - 1) * jitter;
+  var jy = (Math.random() * 2 - 1) * jitter;
+
+  // Иногда "телепорт" (только не на первом толчке)
+  var teleportChance = (isFirstNudge === true) ? 0.0 : 0.40;
+  if (Math.random() < teleportChance) {
+    var tries = 0;
+
+    var minR = 240;
+    var maxR = Math.min(a.width, a.height) * 0.48;
+
+    while (tries < 22) {
+      tries++;
+
+      var ang = Math.random() * Math.PI * 2;
+      var r = minR + Math.random() * Math.max(60, (maxR - minR));
+
+      var x = (yesCx + Math.cos(ang) * r) - n.width / 2 + jx * 0.35;
+      var t = (yesCy + Math.sin(ang) * r) - n.height / 2 + jy * 0.35;
+
+      x = clampLocal(x, leftMin, leftMax);
+      t = clampLocal(t, topMin, topMax);
+
+      // не слишком близко к "ДА"
+      var noCx2 = x + n.width / 2;
+      var noCy2 = t + n.height / 2;
+      var dx2 = noCx2 - yesCx;
+      var dy2 = noCy2 - yesCy;
+
+      if (Math.sqrt(dx2*dx2 + dy2*dy2) > 220) {
+        noBtn.style.left = Math.round(x) + 'px';
+        noBtn.style.top  = Math.round(t) + 'px';
+        return;
+      }
+    }
+
+    // если не нашли идеальную точку — всё равно прыгаем в последнюю
+    noBtn.style.left = Math.round(clampLocal(curLeft + jx * 4, leftMin, leftMax)) + 'px';
+    noBtn.style.top  = Math.round(clampLocal(curTop  + jy * 4, topMin, topMax)) + 'px';
+    return;
+  }
+
+  // Обычный "рывок" от ДА + сильное влево/вправо (орбита)
   var noCx = curLeft + n.width / 2;
   var noCy = curTop  + n.height / 2;
 
-  // Базовый вектор "от ДА"
   var dx = noCx - yesCx;
   var dy = noCy - yesCy;
   var len = Math.sqrt(dx*dx + dy*dy) || 1;
   dx /= len;
   dy /= len;
 
-  // Перпендикуляр (для "орбиты" влево/вправо)
   var px = -dy;
   var py = dx;
   var orbitSign = (Math.random() < 0.5) ? -1 : 1;
 
-  // Скорость/разброс (первый толчок мягче)
-  var step = (isFirstNudge === true) ? 95 : 175;     // дальше и быстрее
-var orbit = (isFirstNudge === true) ? 70 : 160;    // сильнее влево/вправо
-var jitter = (isFirstNudge === true) ? 16 : 34;
+  var step  = (isFirstNudge === true) ? 140 : 280;
+  var orbit = (isFirstNudge === true) ? 140 : 320;
 
-if (isFirstNudge !== true && Math.random() < 0.35) {
-  step *= 1.55;
-  orbit *= 1.45;
-}
+  if (isFirstNudge !== true && Math.random() < 0.50) {
+    step *= 1.35;
+    orbit *= 1.30;
+  }
 
-  // Итоговое смещение: отталкивание + орбита + шум
   var nextLeft = curLeft + dx * step + px * orbit * orbitSign + jx;
   var nextTop  = curTop  + dy * step + py * orbit * orbitSign + jy;
 
-  // Держим в центральной зоне 20–80%
-  nextLeft = clampCentralX(a.width, n.width, nextLeft);
-  nextTop  = clampCentralY(a.height, n.height, nextTop);
+  nextLeft = clampLocal(nextLeft, leftMin, leftMax);
+  nextTop  = clampLocal(nextTop,  topMin,  topMax);
 
   noBtn.style.left = Math.round(nextLeft) + 'px';
   noBtn.style.top  = Math.round(nextTop) + 'px';
