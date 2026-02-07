@@ -803,35 +803,58 @@ runtime.climax.firstNudgeDone = false;
   var y = yesBtn.getBoundingClientRect();
   var n = noBtn.getBoundingClientRect();
 
-  var maxLeft = Math.max(8, a.width - n.width - 8);
-  var maxTop = Math.max(8, a.height - n.height - 8);
+  var pad = 18; // чтобы не липло к краям
+  var maxLeft = Math.max(pad, a.width - n.width - pad);
+  var maxTop  = Math.max(pad, a.height - n.height - pad);
 
-  var yesCx = (y.left - a.left) + y.width / 2;
-  var yesCy = (y.top - a.top) + y.height / 2;
+  // текущая позиция кнопки (берём из style)
+  var curLeft = parseFloat(noBtn.style.left);
+  var curTop  = parseFloat(noBtn.style.top);
 
-  // Первый “подпрыг” делаем мягче (чтобы не улетало далеко),
-  // дальше — убегает сильнее
-  var minDist = (isFirstNudge === true) ? 120 : 170;
-
-  var left = 8, top = 8;
-  var tries = 0;
-
-  while (tries < 24) {
-    tries++;
-    left = 8 + Math.random() * (maxLeft - 8);
-    top = 8 + Math.random() * (maxTop - 8);
-
-    var noCx = left + n.width / 2;
-    var noCy = top + n.height / 2;
-
-    var dx = noCx - yesCx;
-    var dy = noCy - yesCy;
-
-    if (Math.sqrt(dx*dx + dy*dy) > minDist) break;
+  // если ещё не задано — ставим около центра
+  if (!isFinite(curLeft) || !isFinite(curTop)) {
+    curLeft = (a.width - n.width) * 0.50;
+    curTop  = (a.height - n.height) * 0.58;
   }
 
-  noBtn.style.left = Math.round(left) + 'px';
-  noBtn.style.top = Math.round(top) + 'px';
+  // центры YES/NO в координатах арены
+  var yesCx = (y.left - a.left) + y.width / 2;
+  var yesCy = (y.top  - a.top) + y.height / 2;
+
+  var noCx = curLeft + n.width / 2;
+  var noCy = curTop  + n.height / 2;
+
+  // направление "отталкивания" от YES
+  var dx = noCx - yesCx;
+  var dy = noCy - yesCy;
+  var len = Math.sqrt(dx*dx + dy*dy);
+
+  if (len < 1) { // вдруг совпали
+    dx = (Math.random() - 0.5);
+    dy = (Math.random() - 0.5);
+    len = Math.sqrt(dx*dx + dy*dy) || 1;
+  }
+
+  dx /= len;
+  dy /= len;
+
+  // шаг перемещения: первый — маленький, дальше — чуть больше, но не огромный
+  var step = (isFirstNudge === true) ? 70 : 95;
+  var jitter = (isFirstNudge === true) ? 14 : 22;
+
+  // лёгкая “дрожь” чтобы не было идеально прямолинейно
+  var jx = (Math.random() * 2 - 1) * jitter;
+  var jy = (Math.random() * 2 - 1) * jitter;
+
+  var nextLeft = curLeft + dx * step + jx;
+  var nextTop  = curTop  + dy * step + jy;
+
+  // ограничиваем внутри арены
+  nextLeft = clamp(nextLeft, pad, maxLeft);
+  nextTop  = clamp(nextTop,  pad, maxTop);
+
+  noBtn.style.left = Math.round(nextLeft) + 'px';
+  noBtn.style.top  = Math.round(nextTop) + 'px';
 }
 
   // ===== Q3 timer =====
