@@ -704,22 +704,56 @@
 }
 
   function setupClimaxRuntime() {
-    var arena = document.getElementById('climaxArena');
-    var yesBtn = document.getElementById('yesBtn');
-    var noBtn = document.getElementById('noBtn');
-    runtime.climax.firstNudgeDone = false;
-setInitialClimaxPositions();
-    if (!arena || !yesBtn || !noBtn) return;
+  // Защита от двойного вызова (у тебя он реально может происходить)
+  teardownClimaxRuntime();
 
-    runtime.climax.arenaEl = arena;
-    runtime.climax.yesBtn = yesBtn;
-    runtime.climax.noBtn = noBtn;
-    runtime.climax.firstNudgeDone = false;
+  var arena = document.getElementById('climaxArena');
+  var yesBtn = document.getElementById('yesBtn');
+  var noBtn = document.getElementById('noBtn');
+  if (!arena || !yesBtn || !noBtn) return;
 
-    yesBtn.addEventListener('click', function () {
-      goToScreen('final');
-    });
+  runtime.climax.arenaEl = arena;
+  runtime.climax.yesBtn = yesBtn;
+  runtime.climax.noBtn = noBtn;
 
+  // YES
+  runtime.climax.onYes = function () {
+    goToScreen('final');
+  };
+  yesBtn.addEventListener('click', runtime.climax.onYes);
+
+  // Стартовые позиции (ДА и НЕТ рядом по центру)
+  setInitialClimaxPositions();
+  keepNoInCentralBounds();
+
+  // 1) Первый “толчок” — на первое движение указателя по АРЕНЕ (и мышью, и pointer)
+  runtime.climax.firstNudgeDone = false;
+  runtime.climax.onFirstNudge = function () {
+    if (runtime.climax.firstNudgeDone) return;
+    runtime.climax.firstNudgeDone = true;
+    moveNoButton(true);
+  };
+  runtime.climax.firstNudgeHost = arena;
+  arena.addEventListener('pointermove', runtime.climax.onFirstNudge, { passive: true });
+  arena.addEventListener('mousemove', runtime.climax.onFirstNudge, { passive: true });
+
+  // 2) Дальше “НЕТ” убегает только при попытке навести/нажать на неё
+  runtime.climax.onNoRun = function (ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    moveNoButton(false);
+  };
+
+  noBtn.addEventListener('pointerenter', runtime.climax.onNoRun);
+  noBtn.addEventListener('pointerdown', runtime.climax.onNoRun);
+  noBtn.addEventListener('mouseenter', runtime.climax.onNoRun);
+  noBtn.addEventListener('mousedown', runtime.climax.onNoRun);
+
+  // Resize: всегда держим “НЕТ” в центральной зоне
+  runtime.climax.onResize = function () {
+    keepNoInCentralBounds();
+  };
+  window.addEventListener('resize', runtime.climax.onResize);
+}
     function setInitialClimaxPositions() {
   var arena = runtime.climax.arenaEl;
   var yesBtn = runtime.climax.yesBtn;
@@ -829,22 +863,33 @@ keepNoInCentralBounds();
     window.removeEventListener('resize', runtime.climax.onResize);
   }
 
-  // старый вариант: pointermove на арене (если был)
-  if (runtime.climax.arenaEl && runtime.climax.onArenaMove) {
-    runtime.climax.arenaEl.removeEventListener('pointermove', runtime.climax.onArenaMove);
-  }
-  runtime.climax.onArenaMove = null;
-
-  // новый вариант: первый "толчок" на safeRoot
+  // первый толчок (arena)
   if (runtime.climax.firstNudgeHost && runtime.climax.onFirstNudge) {
     runtime.climax.firstNudgeHost.removeEventListener('pointermove', runtime.climax.onFirstNudge);
     runtime.climax.firstNudgeHost.removeEventListener('mousemove', runtime.climax.onFirstNudge);
   }
-  runtime.climax.firstNudgeHost = null;
-  runtime.climax.onFirstNudge = null;
-  runtime.climax.firstNudgeDone = false;
+
+  // убегание (noBtn)
+  if (runtime.climax.noBtn && runtime.climax.onNoRun) {
+    runtime.climax.noBtn.removeEventListener('pointerenter', runtime.climax.onNoRun);
+    runtime.climax.noBtn.removeEventListener('pointerdown', runtime.climax.onNoRun);
+    runtime.climax.noBtn.removeEventListener('mouseenter', runtime.climax.onNoRun);
+    runtime.climax.noBtn.removeEventListener('mousedown', runtime.climax.onNoRun);
+  }
+
+  // YES click
+  if (runtime.climax.yesBtn && runtime.climax.onYes) {
+    runtime.climax.yesBtn.removeEventListener('click', runtime.climax.onYes);
+  }
 
   // чистим ссылки
+  runtime.climax.firstNudgeHost = null;
+  runtime.climax.onFirstNudge = null;
+  runtime.climax.onNoRun = null;
+  runtime.climax.onYes = null;
+
+  runtime.climax.firstNudgeDone = false;
+
   runtime.climax.arenaEl = null;
   runtime.climax.yesBtn = null;
   runtime.climax.noBtn = null;
