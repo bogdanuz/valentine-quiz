@@ -33,8 +33,8 @@
     imgEdward: 'assets/img/quiz/edward.png',
     imgTwilightFrame: 'assets/img/quiz/twilight-frame.webp',
     imgDogQ3: 'assets/img/quiz/millionaire-dog.jpg',
-    imgRetroQ1: 'assets/img/quiz/retro.jpeg',
-    imgKupidonQ4: 'assets/img/quiz/kupidon.jpeg',
+    imgRetroQ1: 'assets/img/quiz/retro.jpg',
+    imgKupidonQ4: 'assets/img/quiz/kupidon.jpg',
     imgNerpaHead: 'assets/img/easter/nerpa-dog-head.png',
     imgHeartBall: 'assets/img/fx/heart-ball.png'
   };
@@ -441,6 +441,7 @@
   imgR.className = 'quizImage';
   imgR.src = ASSETS.imgRetroQ1;
   imgR.alt = '';
+  imgR.onerror = function () { imgR.remove(); };
   qMedia.appendChild(imgR);
 }
 
@@ -449,6 +450,7 @@ if (q.id === 4) {
   imgK.className = 'quizImage';
   imgK.src = ASSETS.imgKupidonQ4;
   imgK.alt = '';
+  imgK.onerror = function () { imgK.remove(); };
   qMedia.appendChild(imgK);
 }
 
@@ -470,13 +472,13 @@ if (q.id === 4) {
     }
 
     if (q.id === 5) {
-      var plaque = document.createElement('div');
-      plaque.className = 'colorPlaque';
-      plaque.innerHTML =
-        '<div class="colorSwatch" style="background:#ADFF2F;"></div>' +
-        '<div class="colorLabel">Kinetic Yellow</div>';
-      qMedia.appendChild(plaque);
-    }
+  var plaque = document.createElement('div');
+  plaque.className = 'colorPlaque';
+  plaque.innerHTML =
+    '<div class="colorSwatch" style="background:#ADFF2F;"></div>' +
+    '<div class="colorLabel">Kinetic Yellow</div>';
+  qMedia.appendChild(plaque);
+}
 
     // Q3 большой таймер в правом верхнем
     if (q.showTimer) {
