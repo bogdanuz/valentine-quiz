@@ -21,7 +21,10 @@
 
     CORRECT_TITLE: 'ВЕРНО!',
     NEXT_Q_BTN: 'Следующий вопрос',
-    GO_FURTHER: 'Идти дальше'
+    GO_FURTHER: 'Идти дальше',
+
+    YES: 'ДА',
+    NO: 'НЕТ'
   };
 
   var ASSETS = {
@@ -104,6 +107,13 @@
       onResize: null
     },
 
+    climax: {
+      arenaEl: null,
+      yesBtn: null,
+      noBtn: null,
+      onResize: null
+    },
+
     overlayEl: null,
 
     q3TimerStartMs: 0,
@@ -132,7 +142,7 @@
   function getDefaultState() {
     return {
       appVersion: APP_VERSION,
-      screenId: 'loading', // {loading,start,prologue,quiz,climax}
+      screenId: 'loading', // {loading,start,prologue,quiz,climax,final}
       prologueScrollDone: false,
       quiz: {
         currentQuestion: 1,
@@ -141,6 +151,7 @@
         attempts: [0, 0, 0, 0, 0],
         edwardShown: false
       },
+      climax: { noRunCount: 0 },
       audio: { musicStarted: false }
     };
   }
@@ -164,6 +175,10 @@
       if (Array.isArray(loaded.quiz.attempts) && loaded.quiz.attempts.length === 5) d.quiz.attempts = loaded.quiz.attempts.map(function(v){ return clampInt(v, 0, 9999); }).slice(0, 5);
 
       d.quiz.edwardShown = !!loaded.quiz.edwardShown;
+    }
+
+    if (loaded.climax && typeof loaded.climax === 'object') {
+      d.climax.noRunCount = clampInt(loaded.climax.noRunCount, 0, 9999);
     }
 
     return d;
@@ -205,6 +220,7 @@
     if (state.screenId === screenId) return;
 
     teardownPrologueRuntime();
+    teardownClimaxRuntime();
     stopQ3Timer();
 
     state.screenId = screenId;
@@ -213,6 +229,7 @@
 
     if (state.screenId === 'prologue') setupPrologueRuntime();
     if (state.screenId === 'quiz') startQ3TimerIfNeeded();
+    if (state.screenId === 'climax') setupClimaxRuntime();
   }
 
   function renderScreen() {
@@ -235,7 +252,7 @@
         startLoadingLoop();
         preloadAssets(function (p01) { runtime.target01 = clamp01(p01); })
           .then(function () { runtime.preloadDone = true; runtime.target01 = 1; })
-          .catch(function (e) { console.error('Preload failed:', e); });
+          .catch(function (e) { console.error('Preload failed:', e); /* soft preload обычно сюда не попадает */ });
       }
       return;
     }
@@ -288,16 +305,26 @@
     }
 
     if (state.screenId === 'climax') {
-      var ph = document.createElement('div');
-      ph.className = 'centerStack';
+      screenEl.appendChild(renderClimax());
+      safeRoot.appendChild(screenEl);
+      requestAnimationFrame(function () {
+        screenEl.classList.add('screen--active');
+        setupClimaxRuntime();
+      });
+      stopLoadingLoop();
+      return;
+    }
 
-      var t = document.createElement('div');
-      t.textContent = FIXED.CLIMAX_Q;
-      t.style.fontSize = '34px';
-      t.style.textAlign = 'center';
+    if (state.screenId === 'final') {
+      var fw = document.createElement('div');
+      fw.className = 'centerStack';
 
-      ph.appendChild(t);
-      screenEl.appendChild(ph);
+      var txt = document.createElement('div');
+      txt.className = 'finalText';
+      txt.textContent = FIXED.FINAL_PHRASE;
+
+      fw.appendChild(txt);
+      screenEl.appendChild(fw);
 
       safeRoot.appendChild(screenEl);
       requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
@@ -655,6 +682,132 @@
     overlay.innerHTML = '';
   }
 
+  // ===== CLIMAX =====
+
+  function renderClimax() {
+    var wrap = document.createElement('div');
+    wrap.className = 'climaxWrap';
+
+    wrap.innerHTML = ''
+      + '<div class="climaxQ">' + escapeHtml(FIXED.CLIMAX_Q) + '</div>'
+      + '<div class="climaxArena" id="climaxArena">'
+      + '  <button class="btn climaxYes" id="yesBtn" type="button">' + escapeHtml(UI.YES) + '</button>'
+      + '  <button class="btn climaxNo" id="noBtn" type="button">' + escapeHtml(UI.NO) + '</button>'
+      + '</div>';
+
+    return wrap;
+  }
+
+  function setupClimaxRuntime() {
+    var arena = document.getElementById('climaxArena');
+    var yesBtn = document.getElementById('yesBtn');
+    var noBtn = document.getElementById('noBtn');
+    if (!arena || !yesBtn || !noBtn) return;
+
+    runtime.climax.arenaEl = arena;
+    runtime.climax.yesBtn = yesBtn;
+    runtime.climax.noBtn = noBtn;
+
+    yesBtn.addEventListener('click', function () {
+      goToScreen('final');
+    });
+
+    // На десктопе: убегаем при наведении, на таче: pointerdown тоже сработает. [web:288][web:297]
+    var run = function (ev) {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      moveNoButton();
+    };
+
+    noBtn.addEventListener('pointerenter', run);
+    noBtn.addEventListener('pointerdown', run);
+
+    runtime.climax.onResize = function () {
+      keepNoInBounds();
+    };
+    window.addEventListener('resize', runtime.climax.onResize);
+
+    // Стартовая “аккуратная” позиция внутри арены
+    requestAnimationFrame(function () {
+      keepNoInBounds();
+    });
+  }
+
+  function teardownClimaxRuntime() {
+    if (runtime.climax.onResize) window.removeEventListener('resize', runtime.climax.onResize);
+
+    runtime.climax.arenaEl = null;
+    runtime.climax.yesBtn = null;
+    runtime.climax.noBtn = null;
+    runtime.climax.onResize = null;
+  }
+
+  function keepNoInBounds() {
+    var arena = runtime.climax.arenaEl;
+    var noBtn = runtime.climax.noBtn;
+    if (!arena || !noBtn) return;
+
+    var a = arena.getBoundingClientRect();
+    var n = noBtn.getBoundingClientRect();
+
+    var left = parseFloat(noBtn.style.left || '0');
+    var top = parseFloat(noBtn.style.top || '0');
+
+    // Если left/top ещё не заданы (NaN) — ставим “нормально” справа внизу
+    if (!isFinite(left) || !isFinite(top)) {
+      left = Math.max(8, Math.min(a.width - n.width - 8, a.width * 0.55));
+      top = Math.max(8, Math.min(a.height - n.height - 8, a.height * 0.62));
+    } else {
+      left = clamp(left, 8, Math.max(8, a.width - n.width - 8));
+      top = clamp(top, 8, Math.max(8, a.height - n.height - 8));
+    }
+
+    noBtn.style.left = Math.round(left) + 'px';
+    noBtn.style.top = Math.round(top) + 'px';
+  }
+
+  function moveNoButton() {
+    var arena = runtime.climax.arenaEl;
+    var yesBtn = runtime.climax.yesBtn;
+    var noBtn = runtime.climax.noBtn;
+    if (!arena || !yesBtn || !noBtn) return;
+
+    state.climax.noRunCount = (state.climax.noRunCount || 0) + 1;
+    saveState();
+
+    var a = arena.getBoundingClientRect();
+    var y = yesBtn.getBoundingClientRect();
+    var n = noBtn.getBoundingClientRect();
+
+    var maxLeft = Math.max(8, a.width - n.width - 8);
+    var maxTop = Math.max(8, a.height - n.height - 8);
+
+    var yesCx = (y.left - a.left) + y.width / 2;
+    var yesCy = (y.top - a.top) + y.height / 2;
+
+    var left = 8, top = 8;
+    var tries = 0;
+
+    while (tries < 24) {
+      tries++;
+      left = 8 + Math.random() * (maxLeft - 8);
+      top = 8 + Math.random() * (maxTop - 8);
+
+      var noCx = left + n.width / 2;
+      var noCy = top + n.height / 2;
+
+      var dx = noCx - yesCx;
+      var dy = noCy - yesCy;
+
+      if (Math.sqrt(dx*dx + dy*dy) > 170) break;
+    }
+
+    noBtn.style.left = Math.round(left) + 'px';
+    noBtn.style.top = Math.round(top) + 'px';
+  }
+
   // ===== Q3 timer =====
 
   function startQ3TimerIfNeeded() {
@@ -707,7 +860,7 @@
     saveState();
   }
 
-  // ===== Loading / preload =====
+  // ===== Loading / preload (soft) =====
 
   function renderLoading() {
     var wrap = document.createElement('div');
@@ -735,36 +888,35 @@
   }
 
   function preloadAssets(onProgress01) {
-  var urls = [
-    ASSETS.audioMusic,
-    ASSETS.imgEdward,
-    ASSETS.imgTwilightFrame,
-    ASSETS.imgDogQ3,
-    ASSETS.imgRetroQ1,
-    ASSETS.imgKupidonQ4
-  ];
+    var urls = [
+      ASSETS.audioMusic,
+      ASSETS.imgEdward,
+      ASSETS.imgTwilightFrame,
+      ASSETS.imgDogQ3,
+      ASSETS.imgRetroQ1,
+      ASSETS.imgKupidonQ4
+    ];
 
-  var done = 0;
-  function markDone() {
-    done++;
-    onProgress01(done / urls.length);
+    var done = 0;
+    function markDone() {
+      done++;
+      onProgress01(done / urls.length);
+    }
+
+    return Promise.all(urls.map(function (url) {
+      return fetch(url, { cache: 'force-cache' })
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.blob();
+        })
+        .catch(function (e) {
+          console.warn('Preload skipped:', url, e);
+        })
+        .then(markDone);
+    })).then(function () {
+      onProgress01(1);
+    });
   }
-
-  return Promise.all(urls.map(function (url) {
-    return fetch(url, { cache: 'force-cache' })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.blob();
-      })
-      .catch(function (e) {
-        // Важно: НЕ блокируем приложение из-за 404
-        console.warn('Preload skipped:', url, e);
-      })
-      .then(markDone);
-  })).then(function () {
-    onProgress01(1);
-  });
-}
 
   function startLoadingLoop() {
     if (runtime.rafId) return;
@@ -810,6 +962,12 @@
   // ===== Utils =====
 
   function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
+
+  function clamp(x, min, max) {
+    if (x < min) return min;
+    if (x > max) return max;
+    return x;
+  }
 
   function clampInt(x, min, max) {
     var v = parseInt(x, 10);
