@@ -8,8 +8,8 @@
   --btn-bg-hover: rgba(255,255,255,0.18);
   --btn-border: rgba(255,255,255,0.22);
 
-  --t-base: 280ms;     /* базовые переходы 250–300ms по ТЗ */
-  --t-zoom: 400ms;     /* START → ПРОЛОГ: лёгкий zoom-in фона ~400ms */
+  --t-base: 280ms;
+  --t-zoom: 400ms;
 }
 
 *{ box-sizing: border-box; }
@@ -111,9 +111,10 @@ html, body{
 }
 
 .btn.btn--wide{
-  width: min(720px, 100%);
+  width: min(820px, 100%);
   padding: 18px 22px;
   font-size: 20px;
+  text-align: center;
 }
 
 /* LOADING */
@@ -122,13 +123,11 @@ html, body{
   gap: 14px;
   place-items: center;
 }
-
 .loadingHeart{
   width: 220px;
   height: auto;
   filter: drop-shadow(0 18px 40px rgba(255, 40, 90, 0.25));
 }
-
 .loadingPercent{
   font-size: 20px;
   letter-spacing: 0.02em;
@@ -145,7 +144,6 @@ html, body{
   -webkit-overflow-scrolling: touch;
   padding: 0;
 }
-
 .prologueScroll{ scrollbar-width: none; }
 .prologueScroll::-webkit-scrollbar{ width: 0; height: 0; }
 
@@ -155,7 +153,6 @@ html, body{
   place-items: center;
   padding: 0 10px;
 }
-
 .prologueGreetingCard{
   width: min(980px, 100%);
   padding: 28px 28px;
@@ -169,7 +166,6 @@ html, body{
   letter-spacing: 0.01em;
   animation: prologueCardIn 280ms ease both;
 }
-
 @keyframes prologueCardIn{
   from{ opacity: 0; transform: translateY(10px) scale(0.99); }
   to{ opacity: 1; transform: translateY(0) scale(1); }
@@ -211,15 +207,9 @@ html, body{
   place-items: center;
   transition: transform 160ms ease, background 160ms ease, opacity 160ms ease;
 }
-
 .navBtn:hover{ background: rgba(255,255,255,0.12); }
 .navBtn:active{ transform: scale(0.98); }
-
-.navBtn[disabled]{
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
+.navBtn[disabled]{ opacity: 0.35; cursor: not-allowed; }
 .navBtn.navBtn--right{ justify-self: end; }
 
 .navIcon{
@@ -227,64 +217,68 @@ html, body{
   line-height: 1;
   transform: translateY(-1px);
 }
-
 .quizCounter{
   font-size: 16px;
   opacity: 0.92;
   letter-spacing: 0.02em;
 }
 
+/* Сильное центрирование композиции */
 .quizBody{
+  height: 100%;
+  width: 100%;
   display: grid;
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: 1fr auto;
+  align-items: start;
+  justify-items: center;
   gap: 18px;
-  justify-items: center; /* центрируем содержимое */
 }
 
 .quizQuestionArea{
-  align-self: start;
+  width: min(1040px, 100%);
   display: grid;
-  gap: 10px;
+  gap: 14px;
   justify-items: center;
-  width: 100%;
 }
 
 .quizQuestionText{
-  font-size: 30px;
-  line-height: 1.16;
+  font-size: 34px;
+  line-height: 1.14;
   letter-spacing: 0.01em;
-  max-width: 980px;
   text-align: center;
 }
 
 .quizMediaRow{
+  width: 100%;
   display: grid;
-  gap: 10px;
-  align-items: center;
+  gap: 12px;
   justify-items: center;
 }
 
 .quizImage{
-  width: 360px;
+  width: min(560px, 100%);
   height: auto;
-  border-radius: 18px;
+  border-radius: 22px;
   border: 1px solid rgba(255,255,255,0.14);
   box-shadow: 0 20px 70px rgba(0,0,0,0.28);
 }
 
-.quizTimer{
-  font-size: 18px;
-  opacity: 0.9;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  width: fit-content;
+.q3CornerTimer{
+  position: absolute;
+  top: 68px;
+  right: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(10,12,22,0.55);
+  border: 1px solid rgba(255,255,255,0.16);
+  backdrop-filter: blur(8px);
+  font-size: 34px;
+  letter-spacing: 0.02em;
 }
 
 .quizTimerColon{
   display: inline-block;
-  width: 8px;
+  width: 12px;
   text-align: center;
   animation: colonPulse 1s ease-in-out infinite;
 }
@@ -294,28 +288,41 @@ html, body{
 }
 
 .quizAnswersArea{
-  align-self: end;
+  width: min(980px, 100%);
   display: grid;
-  gap: 10px;
-  width: min(720px, 100%);
-  justify-items: stretch;
+  justify-items: center;
+  padding-bottom: 6px;
+}
+
+.quizAnswersGrid{
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 980px){
+  .quizAnswersGrid.quizAnswersGrid--2col{
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .answerBtn{
   width: 100%;
-  text-align: left;
+  text-align: center;
+  padding: 16px 18px;
+  font-size: 18px;
+  border-radius: 16px;
 }
 
 .answerBtn.answerBtn--selected{
   border-color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.16);
 }
-
 .answerBtn.answerBtn--wrongHold{
   border-color: rgba(255, 70, 120, 0.95);
   background: rgba(255, 70, 120, 0.18);
 }
-
 .answerBtn.answerBtn--correct{
   border-color: rgba(80, 220, 160, 0.9);
   background: rgba(80, 220, 160, 0.14);
@@ -332,9 +339,7 @@ html, body{
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.14);
   width: fit-content;
-  justify-self: center;
 }
-
 .colorSwatch{
   width: 64px;
   height: 44px;
@@ -342,138 +347,82 @@ html, body{
   border: 1px solid rgba(0,0,0,0.22);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
 }
-
 .colorLabel{
   font-size: 14px;
   opacity: 0.92;
 }
 
-/* Toast "ВЕРНО!" */
-.toast{
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 130px;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 160ms ease, transform 160ms ease;
-  z-index: 10;
-}
-
-.toast.toast--show{
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.toastBox{
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.10);
-  border: 1px solid rgba(255,255,255,0.16);
-  backdrop-filter: blur(8px);
-  font-size: 16px;
-  letter-spacing: 0.02em;
-}
-
-/* Modal overlay */
+/* Overlay & modal */
 .overlay{
   position: absolute;
   inset: 0;
   display: none;
   place-items: center;
   background: rgba(0,0,0,0.35);
-  z-index: 20;
+  z-index: 50;
 }
-
-.overlay.overlay--show{
-  display: grid;
-}
+.overlay.overlay--show{ display: grid; }
 
 .modal{
-  width: min(640px, calc(100% - 40px));
-  border-radius: 18px;
-  background: rgba(20,22,35,0.86);
+  width: min(760px, calc(100% - 40px));
+  border-radius: 22px;
+  background: rgba(20,22,35,0.90);
   border: 1px solid rgba(255,255,255,0.16);
   box-shadow: 0 24px 90px rgba(0,0,0,0.55);
   padding: 18px 18px 16px;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
 
   opacity: 0;
   transform: scale(0.96);
   transition: opacity 260ms ease, transform 260ms ease;
+  position: relative;
 }
-
 .overlay.overlay--show .modal{
   opacity: 1;
   transform: scale(1);
-}
-
-@keyframes modalShake{
-  0%{ transform: scale(1) translateX(0); }
-  10%{ transform: scale(1) translateX(-7px); }
-  20%{ transform: scale(1) translateX(7px); }
-  30%{ transform: scale(1) translateX(-6px); }
-  40%{ transform: scale(1) translateX(6px); }
-  50%{ transform: scale(1) translateX(-4px); }
-  60%{ transform: scale(1) translateX(4px); }
-  70%{ transform: scale(1) translateX(-2px); }
-  80%{ transform: scale(1) translateX(2px); }
-  100%{ transform: scale(1) translateX(0); }
-}
-
-.modal.modal--shake{
-  animation: modalShake 600ms ease-in-out;
-}
-
-.modalHeader{
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.modalTitle{
-  font-size: 18px;
-  opacity: 0.94;
-}
-
-.modalClose{
-  width: 40px;
-  height: 36px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.08);
-  color: var(--text);
-  cursor: pointer;
 }
 
 .modalText{
   font-size: 18px;
   line-height: 1.35;
   margin: 0 0 14px;
+  text-align: center;
 }
 
-.modalImg{
-  width: 100%;
-  height: auto;
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.14);
-  margin: 8px 0 14px;
+.successTitle{
+  font-size: 34px;
+  letter-spacing: 0.03em;
+  text-align: center;
+  margin: 8px 0 8px;
 }
-
-/* Комплимент строкой */
-.memLine{
+.successCompliment{
   font-size: 22px;
-  letter-spacing: 0.01em;
-  opacity: 0;
-  transform: translateY(6px) scale(0.99);
-  transition: opacity 220ms ease, transform 220ms ease;
+  line-height: 1.2;
+  text-align: center;
+  opacity: 0.95;
+  margin: 0 0 16px;
 }
-.memLine.memLine--show{
-  opacity: 1;
-  transform: translateY(0) scale(1);
+
+.successActions{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  justify-items: center;
+}
+
+.stickerEdward{
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%) scale(0.86) rotate(2deg);
+  width: 220px;
+  height: auto;
+  filter: drop-shadow(0 18px 50px rgba(0,0,0,0.55));
+  opacity: 0;
+  animation: stickerPop 320ms ease forwards;
+}
+
+@keyframes stickerPop{
+  from{ opacity: 0; transform: translateY(-50%) scale(0.62) rotate(-6deg); }
+  to{ opacity: 1; transform: translateY(-50%) scale(0.86) rotate(2deg); }
 }
