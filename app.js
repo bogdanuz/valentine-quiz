@@ -682,9 +682,9 @@
     overlay.innerHTML = '';
   }
 
-  // ===== CLIMAX =====
+// ===== CLIMAX =====
 
-  function renderClimax() {
+function renderClimax() {
   var wrap = document.createElement('div');
   wrap.className = 'climaxWrap';
 
@@ -703,8 +703,8 @@
   return wrap;
 }
 
-  function setupClimaxRuntime() {
-  // Защита от двойного вызова (у тебя он реально может происходить)
+function setupClimaxRuntime() {
+  // защита от повторного вызова
   teardownClimaxRuntime();
 
   var arena = document.getElementById('climaxArena');
@@ -722,13 +722,40 @@
   };
   yesBtn.addEventListener('click', runtime.climax.onYes);
 
-  // Стартовые позиции (ДА и НЕТ рядом по центру)
+  // старт: рядом по центру
   setInitialClimaxPositions();
   keepNoInCentralBounds();
+
+  // первый толчок: первое движение в зоне арены
+  runtime.climax.firstNudgeDone = false;
+  runtime.climax.onFirstNudge = function () {
+    if (runtime.climax.firstNudgeDone) return;
+    runtime.climax.firstNudgeDone = true;
+    moveNoButton(true);
+  };
+  runtime.climax.firstNudgeHost = arena;
+  arena.addEventListener('pointermove', runtime.climax.onFirstNudge, { passive: true });
+  arena.addEventListener('mousemove', runtime.climax.onFirstNudge, { passive: true });
+
+  // дальше убегает только при попытке навести/нажать на НЕТ
+  runtime.climax.onNoRun = function (ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    moveNoButton(false);
+  };
+
+  noBtn.addEventListener('pointerenter', runtime.climax.onNoRun);
+  noBtn.addEventListener('pointerdown', runtime.climax.onNoRun);
+  noBtn.addEventListener('mouseenter', runtime.climax.onNoRun);
+  noBtn.addEventListener('mousedown', runtime.climax.onNoRun);
+
+  // resize
+  runtime.climax.onResize = function () {
+    keepNoInCentralBounds();
   };
   window.addEventListener('resize', runtime.climax.onResize);
 }
-    function setInitialClimaxPositions() {
+
+function setInitialClimaxPositions() {
   var arena = runtime.climax.arenaEl;
   var yesBtn = runtime.climax.yesBtn;
   var noBtn = runtime.climax.noBtn;
@@ -738,17 +765,15 @@
   var yesR = yesBtn.getBoundingClientRect();
   var noR = noBtn.getBoundingClientRect();
 
-  // ставим рядом по центру
   var gap = 18;
   var totalW = yesR.width + gap + noR.width;
 
   var y = Math.round(a.height * 0.54);
-
   var startLeft = Math.round((a.width - totalW) / 2);
+
   var yesLeft = startLeft;
   var noLeft = startLeft + yesR.width + gap;
 
-  // ограничим сразу в пределах центральной зоны (20–80%)
   yesBtn.style.left = Math.round(clampCentralX(a.width, yesR.width, yesLeft)) + 'px';
   yesBtn.style.top  = Math.round(clampCentralY(a.height, yesR.height, y - Math.round(yesR.height / 2))) + 'px';
 
@@ -756,7 +781,7 @@
   noBtn.style.top  = Math.round(clampCentralY(a.height, noR.height, y - Math.round(noR.height / 2))) + 'px';
 }
 
-    function clampCentralX(arenaW, btnW, x) {
+function clampCentralX(arenaW, btnW, x) {
   var min = (arenaW - btnW) * 0.20;
   var max = (arenaW - btnW) * 0.80;
   return clamp(x, min, max);
@@ -768,42 +793,7 @@ function clampCentralY(arenaH, btnH, y) {
   return clamp(y, min, max);
 }
 
-    // 1) Первый “толчок” — на первое движение мыши/указателя по экрану climax
-runtime.climax.firstNudgeDone = false;
-
-var firstNudge = function () {
-  if (runtime.climax.firstNudgeDone) return;
-  runtime.climax.firstNudgeDone = true;
-  moveNoButton(true);
-};
-
-// Вешаем на safeRoot (ловит движение вообще везде на этом экране)
-var safeRoot = document.getElementById('safeRoot');
-if (safeRoot) {
-  safeRoot.addEventListener('pointermove', firstNudge);
-  safeRoot.addEventListener('mousemove', firstNudge);
-  runtime.climax.firstNudgeHost = safeRoot;
-  runtime.climax.onFirstNudge = firstNudge;
-}
-
-// 2) Дальше “НЕТ” убегает только при попытке навести/нажать на неё
-var run = function () {
-  moveNoButton(false);
-};
-
-// Pointer events (современные)
-noBtn.addEventListener('pointerenter', run);   // [web:288]
-noBtn.addEventListener('pointerdown', run);    // [web:297]
-
-// Fallback для мыши (на всякий)
-noBtn.addEventListener('mouseenter', run);     // [web:333]
-noBtn.addEventListener('mousedown', run);
-
-// Инициализация позиции + проверка границ
-setInitialClimaxPositions();
-keepNoInCentralBounds();
-
-    function keepNoInCentralBounds() {
+function keepNoInCentralBounds() {
   var arena = runtime.climax.arenaEl;
   var noBtn = runtime.climax.noBtn;
   if (!arena || !noBtn) return;
@@ -823,22 +813,16 @@ keepNoInCentralBounds();
   noBtn.style.top  = Math.round(clampCentralY(a.height, n.height, curTop)) + 'px';
 }
 
-    window.addEventListener('resize', runtime.climax.onResize);
-  }
-
-  function teardownClimaxRuntime() {
-  // resize
+function teardownClimaxRuntime() {
   if (runtime.climax.onResize) {
     window.removeEventListener('resize', runtime.climax.onResize);
   }
 
-  // первый толчок (arena)
   if (runtime.climax.firstNudgeHost && runtime.climax.onFirstNudge) {
     runtime.climax.firstNudgeHost.removeEventListener('pointermove', runtime.climax.onFirstNudge);
     runtime.climax.firstNudgeHost.removeEventListener('mousemove', runtime.climax.onFirstNudge);
   }
 
-  // убегание (noBtn)
   if (runtime.climax.noBtn && runtime.climax.onNoRun) {
     runtime.climax.noBtn.removeEventListener('pointerenter', runtime.climax.onNoRun);
     runtime.climax.noBtn.removeEventListener('pointerdown', runtime.climax.onNoRun);
@@ -846,12 +830,10 @@ keepNoInCentralBounds();
     runtime.climax.noBtn.removeEventListener('mousedown', runtime.climax.onNoRun);
   }
 
-  // YES click
   if (runtime.climax.yesBtn && runtime.climax.onYes) {
     runtime.climax.yesBtn.removeEventListener('click', runtime.climax.onYes);
   }
 
-  // чистим ссылки
   runtime.climax.firstNudgeHost = null;
   runtime.climax.onFirstNudge = null;
   runtime.climax.onNoRun = null;
