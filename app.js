@@ -33,6 +33,8 @@
     imgEdward: 'assets/img/quiz/edward.png',
     imgTwilightFrame: 'assets/img/quiz/twilight-frame.webp',
     imgDogQ3: 'assets/img/quiz/millionaire-dog.jpg',
+    imgRetroQ1: 'assets/img/quiz/retro.jpeg',
+    imgKupidonQ4: 'assets/img/quiz/kupidon.jpeg',
     imgNerpaHead: 'assets/img/easter/nerpa-dog-head.png',
     imgHeartBall: 'assets/img/fx/heart-ball.png'
   };
@@ -433,6 +435,23 @@
     qText.textContent = q.text || '';
 
     qMedia.innerHTML = '';
+
+    if (q.id === 1) {
+  var imgR = document.createElement('img');
+  imgR.className = 'quizImage';
+  imgR.src = ASSETS.imgRetroQ1;
+  imgR.alt = '';
+  qMedia.appendChild(imgR);
+}
+
+if (q.id === 4) {
+  var imgK = document.createElement('img');
+  imgK.className = 'quizImage';
+  imgK.src = ASSETS.imgKupidonQ4;
+  imgK.alt = '';
+  qMedia.appendChild(imgK);
+}
+
 
     if (q.showTwilightFrame) {
       var imgT = document.createElement('img');
