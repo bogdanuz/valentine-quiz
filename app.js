@@ -27,6 +27,23 @@
     NO: 'НЕТ'
   };
 
+  var PHYSICS = {
+  BALL_GRAVITY: 130,
+  BALL_MAX_VY: 250,
+  BALL_MAX_VX: 50,
+  BALL_BOUNCE: 0.03,
+  BALL_AIR_DRAG: 0.972,
+  BALL_GROUND_FRICTION: 0.94,
+  BALL_FREEZE_TIME: 20.0,
+  BALL_SPAWN_COUNT: 50,
+  BALL_SPAWN_COUNT_MOBILE: 35, // Меньше для мобилок
+  
+  DOG_SIZE_RATIO: 0.56,
+  DOG_SPEED_MIN: 80,
+  DOG_SPEED_MAX: 120,
+  DOG_EMERGE_SPEED: 60
+};
+
     var ASSETS = {
     audioMusic: 'assets/audio/music.mp3',
 
@@ -100,6 +117,10 @@
     }
   ];
 
+// Детект мобильного устройства
+var IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                window.innerWidth < 768;
+  
   var state = getDefaultState();
 
   var runtime = {
@@ -222,6 +243,10 @@
       + '  <div class="stageBg" id="stageBg"></div>'
       + '  <div class="safe" id="safeRoot"></div>'
       + '  <div class="overlay" id="overlay" aria-hidden="true"></div>'
+      + '  <button class="globalReset" id="globalMute" type="button" aria-label="Mute" style="right:64px;">'
+      + '    <span class="globalResetIcon" id="muteIcon">🔊</span>'
+      + '    <span class="globalResetLabel">Mute</span>'
+      + '  </button>'
       + '  <button class="globalReset" id="globalReset" type="button" aria-label="Reset">'
       + '    <span class="globalResetIcon">∞</span>'
       + '    <span class="globalResetLabel">Reset</span>'
@@ -395,6 +420,7 @@
       + '<section class="prologueGreetingSection" id="prologueGreeting">'
       + '  <div class="prologueGreetingCard">' + escapeHtml(FIXED.PROLOGUE) + '</div>'
       + '</section>'
+      + '<div style="position:fixed;bottom:clamp(20px,5vh,30px);left:50%;transform:translateX(-50%);font-size:clamp(24px,5vw,32px);opacity:0.65;animation:prologueBounce 1.8s ease-in-out infinite;pointer-events:none;">↓</div>'
       + '<div style="height: 520px;"></div>'
       + '<div class="quizAnchor" id="quizAnchor"></div>'
       + '<div style="height: 520px;"></div>';
@@ -1008,11 +1034,11 @@ function moveNoButton(isFirstNudge) {
       + '    <source src="' + escapeAttr(ASSETS.videoMp4) + '" type="video/mp4" />'
       + '  </video>'
       + '</div>'
-      + '<canvas class="finalCanvas" id="finalCanvas"></canvas>'
+      + '<canvas class="finalCanvas" id="finalCanvas" role="img" aria-label="Падающие сердечки"></canvas>'
       + '<div class="finalHud">'
-      + '  <div class="finalHint" id="finalHint">' + escapeHtml(FIXED.EASTER_HINT) + '</div>'
-      + '  <div class="finalCongrats" id="finalCongrats">' + escapeHtml(FIXED.FINAL_PHRASE) + '</div>'
-      + '  <div class="finalToast" id="finalToast">Режим «Бульдозер» активирован!</div>'
+      + '  <div class="finalHint" id="finalHint" role="status" aria-live="polite">' + escapeHtml(FIXED.EASTER_HINT) + '</div>'
+      + '  <div class="finalCongrats" id="finalCongrats" role="status" aria-live="polite">' + escapeHtml(FIXED.FINAL_PHRASE) + '</div>'
+      + '  <div class="finalToast" id="finalToast" role="alert" aria-live="assertive">Режим «Бульдозер» активирован!</div>'
       + '  <div class="finalControls">'
       + '    <button class="finalMiniBtn" id="finalReplay" type="button">К валентинке</button>'
       + '    <button class="finalMiniBtn" id="finalClearBalls" type="button">Убрать шары</button>'
@@ -1123,6 +1149,14 @@ function setupFinalRuntime() {
   video.muted = true;
   video.loop = true;
   video.play().catch(function(){});
+    // ДОБАВЛЕНО: обработка ошибок видео
+  video.addEventListener('error', function() {
+    var msg = document.createElement('div');
+    msg.style.cssText = 'position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(18px,4vw,22px);text-align:center;padding:20px;z-index:999;background:rgba(10,12,22,0.85);';
+    msg.innerHTML = 'Видео не загрузилось 😢<br><br><button class="btn" onclick="location.reload()">Обновить страницу</button>';
+    if (canvas.parentNode) canvas.parentNode.appendChild(msg);
+  });
+
 
   finalResizeCanvas();
 
@@ -1158,6 +1192,10 @@ function setupFinalRuntime() {
     canvas.height = Math.round(rect.height * dpr);
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    
+    // ДОБАВЛЕНО: кэшируем размеры для finalDraw
+    runtime.final.cachedW = rect.width;
+    runtime.final.cachedH = rect.height;
   }
 
 function finalHitBall(x, y) {
@@ -1183,20 +1221,19 @@ function triggerEasterFromFinal(ball) {
   var w = rect.width;
   var h = rect.height;
 
-  // ИСПРАВЛЕНО: размер ×2 (было 0.28, стало 0.56)
-  var dogW = Math.min(w, h) * 0.56;
+  var dogW = Math.min(w, h) * PHYSICS.DOG_SIZE_RATIO;
   var dogH = dogW * 0.85;
 
   runtime.final.dog = {
     x: w * 0.5,
-    y: h + dogH * 0.6,  // ИСПРАВЛЕНО: начинаем ЗА экраном снизу
-    targetY: h - dogH * 0.35,  // ДОБАВЛЕНО: целевая позиция (видна голова)
+    y: h + dogH * 0.6,  // начинаем ЗА экраном снизу
+    targetY: h - dogH * 0.35,  // целевая позиция (видна голова)
     w: dogW,
     h: dogH,
-    vx: 80 + Math.random() * 40,
-    facing: 1,
-    emerging: true,  // ДОБАВЛЕНО: флаг анимации выползания
-    emergeSpeed: 60  // ДОБАВЛЕНО: скорость выползания (px/sec)
+    vx: PHYSICS.DOG_SPEED_MIN + Math.random() * (PHYSICS.DOG_SPEED_MAX - PHYSICS.DOG_SPEED_MIN),
+    facing: -1,  // ИСПРАВЛЕНО: -1 = смотрит влево (потому что PNG отзеркален)
+    emerging: true,
+    emergeSpeed: PHYSICS.DOG_EMERGE_SPEED
   };
 
   finalShowToast();
@@ -1228,7 +1265,7 @@ function triggerEasterFromFinal(ball) {
     runtime.final.ballsFade01 = 1;
     runtime.final.fadeMode = 0;
     runtime.final.ballsStartTime = t;  // ДОБАВЛЕНО: запомним время старта
-    finalSpawnBalls(50);
+    finalSpawnBalls(); // автоматически по IS_MOBILE
     finalHideHint();
     finalHideCongrats();
     runtime.final.hintAt = t + 2.0 + Math.random() * 3.5;
@@ -1247,9 +1284,9 @@ function triggerEasterFromFinal(ball) {
     finalShowCongrats();
   }
 
-  // ДОБАВЛЕНО: заморозка шаров через 20 сек после старта
+  // Заморозка шаров через константу
   var ballsAge = runtime.final.ballsStarted ? (t - (runtime.final.ballsStartTime || 0)) : 0;
-  var shouldFreeze = runtime.final.ballsStarted && ballsAge >= 20.0;
+  var shouldFreeze = runtime.final.ballsStarted && ballsAge >= PHYSICS.BALL_FREEZE_TIME;
 
   if (!shouldFreeze) {
     finalUpdateBalls(dt);
@@ -1312,9 +1349,14 @@ function triggerEasterFromFinal(ball) {
   var w = rect.width;
   var h = rect.height;
 
+  // ИСПРАВЛЕНО: адаптивное кол-во шаров
+  if (count === undefined) {
+    count = IS_MOBILE ? PHYSICS.BALL_SPAWN_COUNT_MOBILE : PHYSICS.BALL_SPAWN_COUNT;
+  }
+
   var baseR = Math.min(w, h) * 0.16;
   if (!isFinite(baseR)) baseR = 120;
-  baseR = clamp(baseR, 70, 260);
+  baseR = clamp(baseR, 70, IS_MOBILE ? 140 : 180); // ИСПРАВЛЕНО: меньше макс размер на мобилках
 
   runtime.final.balls = [];
   runtime.final.spawn = {
@@ -1404,14 +1446,14 @@ function finalUpdateBalls(dt) {
 
   if (balls.length === 0) return;
 
-  // --- ЕЩЕ МЕДЛЕННЕЕ ФИЗИКА ---
-  var g = 130;          // УМЕНЬШЕНО: еще медленнее падение
-  var air = 0.972;      // чуть больше сопротивления
-  var bounce = 0.03;    // УМЕНЬШЕНО: почти нет отскока
-  var groundFriction = 0.94; // еще больше трения
+   // Физика из констант
+  var g = PHYSICS.BALL_GRAVITY;
+  var air = PHYSICS.BALL_AIR_DRAG;
+  var bounce = PHYSICS.BALL_BOUNCE;
+  var groundFriction = PHYSICS.BALL_GROUND_FRICTION;
 
-  var maxVy = 250;      // УМЕНЬШЕНО: еще меньше макс. скорость
-  var maxVx = 50;       // УМЕНЬШЕНО
+  var maxVy = PHYSICS.BALL_MAX_VY;
+  var maxVx = PHYSICS.BALL_MAX_VX;
   
   var angularDrag = 0.98; // сопротивление вращению [web:20]
 
@@ -1555,9 +1597,9 @@ function finalDraw() {
   var canvas = runtime.final.canvasEl;
   if (!ctx || !canvas) return;
 
-  var rect = canvas.getBoundingClientRect();
-  var w = rect.width;
-  var h = rect.height;
+  // ИСПРАВЛЕНО: используем кэшированные размеры
+  var w = runtime.final.cachedW || canvas.width;
+  var h = runtime.final.cachedH || canvas.height;
 
   ctx.clearRect(0, 0, w, h);
 
@@ -1586,12 +1628,24 @@ function finalDraw() {
         ctx.globalAlpha = 1;
   }
 
-  // Собака-бульдозер
+    // Собака-бульдозер
   if (runtime.final.dog && runtime.final.dogImgReady && runtime.final.dogImg) {
     var dog = runtime.final.dog;
+    
+    // ДОБАВЛЕНО: тень под собакой
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(dog.x, dog.y + dog.h * 0.4, dog.w * 0.4, dog.h * 0.15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    
+    // Рисуем собаку
     ctx.save();
     ctx.translate(dog.x, dog.y);
-    if (dog.facing < 0) ctx.scale(-1, 1);
+    // ИСПРАВЛЕНО: facing=1 = отзеркалить (PNG смотрит влево)
+    if (dog.facing > 0) ctx.scale(-1, 1);
     ctx.globalAlpha = 0.98;
     ctx.drawImage(runtime.final.dogImg, -dog.w * 0.5, -dog.h * 0.5, dog.w, dog.h);
     ctx.restore();
@@ -1606,27 +1660,28 @@ function finalUpdateDog(dt) {
   var rect = canvas.getBoundingClientRect();
   var w = rect.width;
 
-  // ДОБАВЛЕНО: анимация выползания снизу
+  // Анимация выползания снизу
   if (dog.emerging) {
-    dog.y -= dog.emergeSpeed * dt;  // движение вверх
+    dog.y -= dog.emergeSpeed * dt;
     if (dog.y <= dog.targetY) {
       dog.y = dog.targetY;
-      dog.emerging = false;  // выползание завершено
+      dog.emerging = false;
     }
   }
 
-  // Горизонтальное движение (туда-сюда)
+  // Горизонтальное движение
   dog.x += dog.vx * dt;
 
+  // ИСПРАВЛЕНО: инвертированная логика (PNG смотрит влево = facing -1)
   if (dog.x - dog.w * 0.5 < 0) {
     dog.x = dog.w * 0.5;
     dog.vx = Math.abs(dog.vx);
-    dog.facing = 1;
+    dog.facing = 1; // вправо = нужно отзеркалить PNG
   }
   if (dog.x + dog.w * 0.5 > w) {
     dog.x = w - dog.w * 0.5;
     dog.vx = -Math.abs(dog.vx);
-    dog.facing = -1;
+    dog.facing = -1; // влево = оригинальный PNG
   }
 
   var balls = runtime.final.balls;
@@ -1705,11 +1760,10 @@ function finalToggleBalls() {
     runtime.final.ballsStarted = true;
     runtime.final.ballsFade01 = 1;
     runtime.final.fadeMode = 0;
-    runtime.final.ballsStartTime = t;  // ИСПРАВЛЕНО: используем время видео
-    finalSpawnBalls(50);
-    finalHideCongrats();
-    runtime.final.congratsAt = t + 5.0;  // ИСПРАВЛЕНО: относительно видео
-    runtime.final.congratsShown = false;
+    runtime.final.ballsStartTime = t;
+    finalSpawnBalls(); // ИСПРАВЛЕНО: без аргумента = автоматически по IS_MOBILE
+    // УБРАНО: finalHideCongrats() — поздравление остаётся
+    runtime.final.congratsShown = true; // принудительно оставляем видимым
   } else {
     // Был режим "шары есть" → убираем шары
     btn.textContent = 'Шаропад';
@@ -1807,7 +1861,8 @@ function finalToggleBalls() {
   ASSETS.imgDogQ3,
   ASSETS.imgRetroQ1,
   ASSETS.imgKupidonQ4,
-  ASSETS.imgHeartBall
+  ASSETS.imgHeartBall,
+  ASSETS.imgNerpaDog // ДОБАВЛЕНО: прелоад собаки
 ];
       // Мягкий прогрев видео для финала (чтобы появлялось быстрее)
   // fetch(..., { cache: 'force-cache' }) старается взять/обновить HTTP-кэш. [web:531]
@@ -1828,6 +1883,15 @@ function finalToggleBalls() {
   })();
 
     var done = 0;
+    // ДОБАВЛЕНО: Горячий старт видео (прогреваем decoder)
+var ghost = document.createElement('video');
+ghost.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;';
+ghost.muted = true;
+ghost.preload = 'auto';
+ghost.src = ASSETS.videoMp4;
+document.body.appendChild(ghost);
+ghost.load();
+setTimeout(function(){ if(ghost.parentNode) ghost.parentNode.removeChild(ghost); }, 8000);
     function markDone() {
       done++;
       onProgress01(done / urls.length);
@@ -1895,13 +1959,24 @@ function finalToggleBalls() {
     if (resetBound) return;
     resetBound = true;
 
-    var btn = document.getElementById('globalReset');
-    if (!btn) return;
+    var resetBtn = document.getElementById('globalReset');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        location.reload();
+      });
+    }
 
-    btn.addEventListener('click', function () {
-      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-      location.reload();
-    });
+    // ДОБАВЛЕНО: кнопка Mute
+    var muteBtn = document.getElementById('globalMute');
+    if (muteBtn) {
+      muteBtn.addEventListener('click', function () {
+        if (!runtime.musicEl) return;
+        runtime.musicEl.muted = !runtime.musicEl.muted;
+        var icon = document.getElementById('muteIcon');
+        if (icon) icon.textContent = runtime.musicEl.muted ? '🔇' : '🔊';
+      });
+    }
   }
   
   // ===== Utils =====
