@@ -1,14 +1,10 @@
 (function () {
   'use strict';
 
-  // =========================
-  // ТЗ константы
-  // =========================
-
   var STORAGE_KEY = 'valentine_state_v1';
   var APP_VERSION = 'v1';
 
-  // Зафиксированные тексты (НЕ МЕНЯТЬ)
+  // Фикс-тексты (НЕ МЕНЯТЬ)
   var FIXED = {
     PROLOGUE: 'Добро пожаловать, Анастасия, в самый валентиновый из всех святых и самый святой из всех валентиновых квизов совместимости.',
     CLIMAX_Q: 'Будете ли Вы моей Валентинкой?',
@@ -16,15 +12,6 @@
     EASTER_HINT: 'Псс… нажмите 3 раза на любой шар.',
     MEM_COMPLIMENT: 'Ты — мой личный сорт героина'
   };
-
-  // Комплименты (ровно эти 5, без добавления)
-  var COMPLIMENTS = [
-    'Ты — мой личный сорт героина',
-    'Ты — лучшее, что со мной случалось!',
-    'Ты — мой дом, даже когда мы не дома',
-    'Ты — самая красивая, умная, заботливая, понимающая и сексуальная женщина!',
-    'Спасибо за твою поддержку!'
-  ];
 
   var UI = {
     START_BTN: 'Начать',
@@ -50,23 +37,16 @@
     imgHeartBall: 'assets/img/fx/heart-ball.png'
   };
 
-  // Тайминги из ТЗ (где указаны)
+  // Тайминги (только то, что в ТЗ явно указано)
   var T = {
-    BASE_TRANSITION_MS: 280,
-
     TOAST_IN_MS: 160,
     TOAST_HOLD_MS: 900,
     TOAST_OUT_MS: 160,
 
-    MEM_TEXT_MS: 700,
-
-    EDWARD_SCALE_IN_MS: 260,
-    EDWARD_SHAKE_MS: 600
+    MEM_TEXT_MS: 700,          // Q2 мем-текст 700ms
+    EDWARD_SCALE_IN_MS: 260,   // scale-in 260ms (делаем CSS transition)
+    EDWARD_SHAKE_MS: 600       // shake 600ms (CSS keyframes)
   };
-
-  // =========================
-  // State
-  // =========================
 
   var state = getDefaultState();
 
@@ -86,13 +66,13 @@
       scrollRaf: 0
     },
 
-    // UI refs
     overlayEl: null,
     toastEl: null,
 
-    // Quiz timer
     q3TimerStartMs: 0,
-    q3TimerRaf: 0
+    q3TimerRaf: 0,
+
+    wrongHold: { active: false, qIdx: -1, ansIdx: -1 }
   };
 
   var appEl = document.getElementById('app');
@@ -100,38 +80,17 @@
   init();
 
   function init() {
-    var restored = loadState();
-    if (restored) state = restored;
+    var loaded = loadState();
+    if (loaded) {
+      state = normalizeState(loaded);
+      saveState(); // сохраняем нормализованное состояние
+    }
 
     ensureRoot();
     if (!state.screenId) state.screenId = 'loading';
 
     renderScreen();
     armMusicResumeOnNextUserGestureIfNeeded();
-    attachGlobalQuizHotkeys();
-
-    if (isDev()) {
-      window.__valentineDebug = {
-        getState: function(){ return state; },
-        goToScreen: goToScreen,
-        saveState: saveState,
-        resetState: function(){
-          state = getDefaultState();
-          saveState();
-          runtime.preloadStarted = false;
-          runtime.preloadDone = false;
-          runtime.target01 = 0;
-          runtime.shown01 = 0;
-          stopLoadingLoop();
-          stopQ3Timer();
-          runtime.musicEl = null;
-          runtime.musicResumeArmed = false;
-          teardownPrologueRuntime();
-          renderScreen();
-          armMusicResumeOnNextUserGestureIfNeeded();
-        }
-      };
-    }
   }
 
   function getDefaultState() {
@@ -158,9 +117,53 @@
     };
   }
 
-  // =========================
-  // Storage
-  // =========================
+  // Нормализация (защита от “битого/старого” state в localStorage)
+  function normalizeState(loaded) {
+    var d = getDefaultState();
+    if (!loaded || typeof loaded !== 'object') return d;
+
+    // screenId
+    if (typeof loaded.screenId === 'string') d.screenId = loaded.screenId;
+
+    // prologueScrollDone
+    d.prologueScrollDone = !!loaded.prologueScrollDone;
+
+    // audio
+    if (loaded.audio && typeof loaded.audio === 'object') {
+      d.audio.musicStarted = !!loaded.audio.musicStarted;
+    }
+
+    // quiz
+    if (loaded.quiz && typeof loaded.quiz === 'object') {
+      d.quiz.currentQuestion = clampInt(loaded.quiz.currentQuestion, 1, 5);
+
+      if (Array.isArray(loaded.quiz.answers) && loaded.quiz.answers.length === 5) {
+        d.quiz.answers = loaded.quiz.answers.slice(0, 5);
+      }
+      if (Array.isArray(loaded.quiz.isCorrect) && loaded.quiz.isCorrect.length === 5) {
+        d.quiz.isCorrect = loaded.quiz.isCorrect.map(function (v) { return !!v; }).slice(0, 5);
+      }
+      if (Array.isArray(loaded.quiz.attempts) && loaded.quiz.attempts.length === 5) {
+        d.quiz.attempts = loaded.quiz.attempts.map(function (v) { return clampInt(v, 0, 9999); }).slice(0, 5);
+      }
+
+      d.quiz.edwardShown = !!loaded.quiz.edwardShown;
+    }
+
+    // climax/finale
+    if (loaded.climax && typeof loaded.climax === 'object') {
+      d.climax.noRunCount = clampInt(loaded.climax.noRunCount, 0, 9999);
+    }
+    if (loaded.finale && typeof loaded.finale === 'object') {
+      d.finale.videoStarted = !!loaded.finale.videoStarted;
+      d.finale.ballsStarted = !!loaded.finale.ballsStarted;
+      d.finale.ballsFullyCovered = !!loaded.finale.ballsFullyCovered;
+      d.finale.easterHintShown = !!loaded.finale.easterHintShown;
+      d.finale.nerpaActivated = !!loaded.finale.nerpaActivated;
+    }
+
+    return d;
+  }
 
   function loadState() {
     try {
@@ -168,7 +171,7 @@
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return null;
-      if (parsed.appVersion !== APP_VERSION) return null;
+      // appVersion в ТЗ строка; мы не ломаем совместимость — просто нормализуем
       return parsed;
     } catch (e) {
       console.warn('loadState failed:', e);
@@ -184,38 +187,6 @@
     }
   }
 
-  // =========================
-  // Screen machine
-  // =========================
-
-  function goToScreen(screenId) {
-    var ok =
-      screenId === 'loading' ||
-      screenId === 'start' ||
-      screenId === 'prologue' ||
-      screenId === 'quiz' ||
-      screenId === 'result' ||
-      screenId === 'climax' ||
-      screenId === 'final';
-
-    if (!ok) {
-      console.warn('Unknown screenId:', screenId);
-      return;
-    }
-
-    if (state.screenId === screenId) return;
-
-    teardownPrologueRuntime();
-    stopQ3Timer();
-
-    state.screenId = screenId;
-    saveState();
-    renderScreen();
-
-    if (state.screenId === 'prologue') setupPrologueRuntime();
-    if (state.screenId === 'quiz') startQ3TimerIfNeeded();
-  }
-
   function ensureRoot() {
     if (!appEl) return;
 
@@ -229,6 +200,20 @@
 
     runtime.overlayEl = document.getElementById('overlay');
     runtime.toastEl = document.getElementById('toast');
+  }
+
+  function goToScreen(screenId) {
+    if (state.screenId === screenId) return;
+
+    teardownPrologueRuntime();
+    stopQ3Timer();
+
+    state.screenId = screenId;
+    saveState();
+    renderScreen();
+
+    if (state.screenId === 'prologue') setupPrologueRuntime();
+    if (state.screenId === 'quiz') startQ3TimerIfNeeded();
   }
 
   function renderScreen() {
@@ -302,7 +287,6 @@
       return;
     }
 
-    // Заглушки будущих экранов
     safeRoot.appendChild(screenEl);
     requestAnimationFrame(function () { screenEl.classList.add('screen--active'); });
     stopLoadingLoop();
@@ -314,9 +298,7 @@
     bg.classList.add('stageBg--zoomIn');
   }
 
-  // =========================
-  // PROLOGUE
-  // =========================
+  // ===== PROLOGUE =====
 
   function renderPrologue() {
     var wrap = document.createElement('div');
@@ -389,9 +371,7 @@
     }
   }
 
-  // =========================
-  // QUIZ data
-  // =========================
+  // ===== QUIZ data =====
 
   var QUIZ = [
     {
@@ -400,10 +380,7 @@
       answers: ['3640', '3654', '3670', '3699'],
       correctIndex: 1,
       repeatOnWrong: true,
-      compliment: 'Ты — мой дом, даже когда мы не дома',
-      showTwilightFrame: false,
-      showDog: false,
-      showTimer: false
+      compliment: 'Ты — мой дом, даже когда мы не дома'
     },
     {
       id: 2,
@@ -412,19 +389,14 @@
       correctIndex: 2,
       repeatOnWrong: true,
       compliment: 'Ты — мой личный сорт героина',
-      showTwilightFrame: true,
-      showDog: false,
-      showTimer: false
+      showTwilightFrame: true
     },
     {
       id: 3,
       text: '',
       answers: ['Французская нерпа', 'Луковый суп', 'Луи Пигодье', 'Бигош Лукович'],
-      correctIndex: 0, // не используется
-      repeatOnWrong: false,
       alwaysCorrect: true,
       compliment: 'Ты — лучшее, что со мной случалось!',
-      showTwilightFrame: false,
       showDog: true,
       showTimer: true
     },
@@ -432,13 +404,8 @@
       id: 4,
       text: 'Разрешите моему купидону попасть сегодня в сердце — и не только…',
       answers: ['Хочу скорее увидеть твою стрелу'],
-      correctIndex: 0,
-      repeatOnWrong: false,
       alwaysCorrect: true,
       compliment: 'Ты — самая красивая, умная, заботливая, понимающая и сексуальная женщина!',
-      showTwilightFrame: false,
-      showDog: false,
-      showTimer: false,
       isWideSingle: true
     },
     {
@@ -453,9 +420,6 @@
       correctIndex: 0,
       repeatOnWrong: true,
       compliment: 'Спасибо за твою поддержку!',
-      showTwilightFrame: false,
-      showDog: false,
-      showTimer: false,
       showColorPlaque: true
     }
   ];
@@ -464,11 +428,11 @@
     return clampInt(state.quiz.currentQuestion, 1, 5) - 1;
   }
 
-  // =========================
-  // QUIZ render
-  // =========================
-
   function renderQuiz() {
+    // На всякий случай: если вдруг состояние снова “битое” — нормализуем на лету
+    state = normalizeState(state);
+    saveState();
+
     var qIdx = qIndexFromState();
     var q = QUIZ[qIdx];
 
@@ -478,29 +442,25 @@
     wrap.innerHTML = ''
       + '<div class="quizTopbar">'
       + '  <button class="navBtn" id="navBack" type="button" aria-label="назад"><span class="navIcon">‹</span></button>'
-      + '  <div class="quizCounter" id="quizCounter">Вопрос ' + (qIdx + 1) + '/5</div>'
+      + '  <div class="quizCounter">Вопрос ' + (qIdx + 1) + '/5</div>'
       + '  <button class="navBtn navBtn--right" id="navNext" type="button" aria-label="вперёд"><span class="navIcon">›</span></button>'
       + '</div>'
       + '<div class="quizBody">'
       + '  <div class="quizQuestionArea">'
-      + '    <div class="qCard qCard--active" id="qCard">'
-      + '      <div class="quizQuestionText" id="qText"></div>'
-      + '      <div class="quizMediaRow" id="qMedia"></div>'
-      + '    </div>'
+      + '    <div class="quizQuestionText" id="qText"></div>'
+      + '    <div class="quizMediaRow" id="qMedia"></div>'
       + '  </div>'
       + '  <div class="quizAnswersArea" id="qAnswers"></div>'
       + '</div>';
 
-    // Fill content
     var qText = wrap.querySelector('#qText');
     var qMedia = wrap.querySelector('#qMedia');
     var qAnswers = wrap.querySelector('#qAnswers');
 
-    // Q3 has no text in TZ besides image + options; keep text empty
     qText.textContent = q.text || '';
 
-    // Media: Q2 twilight frame image, Q3 dog image, Q3 timer
     qMedia.innerHTML = '';
+
     if (q.showTwilightFrame) {
       var imgT = document.createElement('img');
       imgT.className = 'quizImage';
@@ -508,6 +468,7 @@
       imgT.alt = '';
       qMedia.appendChild(imgT);
     }
+
     if (q.showDog) {
       var imgD = document.createElement('img');
       imgD.className = 'quizImage';
@@ -515,6 +476,7 @@
       imgD.alt = '';
       qMedia.appendChild(imgD);
     }
+
     if (q.showTimer) {
       var timer = document.createElement('div');
       timer.className = 'quizTimer';
@@ -523,17 +485,15 @@
       qMedia.appendChild(timer);
     }
 
-    // Q5 color plaque
     if (q.id === 5) {
       var plaque = document.createElement('div');
       plaque.className = 'colorPlaque';
-      plaque.innerHTML = ''
-        + '<div class="colorSwatch" style="background:#ADFF2F;"></div>'
-        + '<div class="colorLabel">Kinetic Yellow</div>';
+      plaque.innerHTML =
+        '<div class="colorSwatch" style="background:#ADFF2F;"></div>' +
+        '<div class="colorLabel">Kinetic Yellow</div>';
       qMedia.appendChild(plaque);
     }
 
-    // Answers
     qAnswers.innerHTML = '';
     var selected = state.quiz.answers[qIdx];
 
@@ -547,6 +507,10 @@
       if (selected === i) b.classList.add('answerBtn--selected');
       if (state.quiz.isCorrect[qIdx] === true && selected === i) b.classList.add('answerBtn--correct');
 
+      if (runtime.wrongHold.active && runtime.wrongHold.qIdx === qIdx && runtime.wrongHold.ansIdx === i) {
+        b.classList.add('answerBtn--wrongHold');
+      }
+
       b.addEventListener('click', function (ev) {
         var idx = parseInt(ev.currentTarget.getAttribute('data-ans'), 10);
         selectAnswer(idx);
@@ -555,24 +519,26 @@
       qAnswers.appendChild(b);
     }
 
-    // Topbar nav states
     var backBtn = wrap.querySelector('#navBack');
     var nextBtn = wrap.querySelector('#navNext');
 
-    backBtn.disabled = (qIdx === 0);
+    // “назад” всегда доступна (но на Q1 просто ничего не делает)
+    backBtn.disabled = false;
     nextBtn.disabled = !canGoNextFromCurrent();
 
     backBtn.addEventListener('click', function () {
-      if (qIdx === 0) return;
-      state.quiz.currentQuestion = qIdx; // go to previous
+      var qI = qIndexFromState();
+      if (qI <= 0) return;
+      state.quiz.currentQuestion = qI; // previous question number
       saveState();
       renderScreen();
     });
 
     nextBtn.addEventListener('click', function () {
       if (!canGoNextFromCurrent()) return;
-      if (qIdx === 4) return; // в Стадии 6 будет переход к RESULT
-      state.quiz.currentQuestion = qIdx + 2; // next question
+      var qI = qIndexFromState();
+      if (qI >= 4) return; // на Стадии 6 будет переход к RESULT
+      state.quiz.currentQuestion = qI + 2;
       saveState();
       renderScreen();
     });
@@ -582,37 +548,33 @@
 
   function canGoNextFromCurrent() {
     var qIdx = qIndexFromState();
-    if (qIdx < 0 || qIdx > 4) return false;
 
     // Q1/Q2/Q5: вперед только после верного
     if (qIdx === 0 || qIdx === 1 || qIdx === 4) return state.quiz.isCorrect[qIdx] === true;
 
-    // Q3/Q4: всегда “верно” после выбора/клика
+    // Q3/Q4: верно после выбора/клика
     return state.quiz.isCorrect[qIdx] === true;
   }
-
-  // =========================
-  // QUIZ logic
-  // =========================
 
   function selectAnswer(answerIndex) {
     var qIdx = qIndexFromState();
     var q = QUIZ[qIdx];
 
-    // Сохраняем выбор
+    runtime.wrongHold.active = false;
+    runtime.wrongHold.qIdx = -1;
+    runtime.wrongHold.ansIdx = -1;
+
     state.quiz.answers[qIdx] = answerIndex;
     saveState();
 
-    // Валидация
-    if (q.id === 3 || q.id === 4 || q.alwaysCorrect) {
-      // всегда верно
+    // Q3/Q4 всегда верно
+    if (q.alwaysCorrect) {
       state.quiz.isCorrect[qIdx] = true;
       saveState();
 
       showToast(UI.TOAST_CORRECT);
-      showMemLineIfNeeded(qIdx);
+      showComplimentLine(q.id);
 
-      // Обновим экран, чтобы подсветить выбранное как correct и разблокировать next
       renderScreen();
       return;
     }
@@ -625,60 +587,55 @@
 
       showToast(UI.TOAST_CORRECT);
 
-      // комплименты по схеме C
-      showMemLineIfNeeded(qIdx);
-
-      // После верного Q2: мем-вставка + Эдвард pop-up (1 раз за квиз, переживает F5)
       if (q.id === 2) {
-        runEdwardBlockIfNeeded();
+        // строго: после верного Q2: toast → комплимент → Edward (1 раз)
+        setTimeout(function () {
+          showComplimentLine(2);
+          runEdwardBlockIfNeeded();
+        }, T.TOAST_IN_MS);
+      } else {
+        showComplimentLine(q.id);
       }
 
       renderScreen();
       return;
     }
 
-    // Неверно: только для Q1/Q2/Q5
+    // Неверно (Q1/Q2/Q5)
     if (q.repeatOnWrong === true) {
       state.quiz.attempts[qIdx] = (state.quiz.attempts[qIdx] || 0) + 1;
       saveState();
 
-      // подсветка неверной кнопки держится пока модалка открыта
-      holdWrongHighlight(answerIndex);
+      runtime.wrongHold.active = true;
+      runtime.wrongHold.qIdx = qIdx;
+      runtime.wrongHold.ansIdx = answerIndex;
+
+      renderScreen(); // важно: чтобы подсветка применялась через runtime.wrongHold
 
       showModal(UI.WRONG_POPUP_TEXT, UI.WRONG_POPUP_BTN, function () {
-        clearWrongHighlight();
+        runtime.wrongHold.active = false;
+        runtime.wrongHold.qIdx = -1;
+        runtime.wrongHold.ansIdx = -1;
+        renderScreen();
       });
 
-      // вперед должен оставаться заблокирован
-      renderScreen();
       return;
     }
   }
 
-  function showMemLineIfNeeded(qIdx) {
-    // Комплименты по ТЗ:
-    // Q1: “Ты — мой дом, даже когда мы не дома”
-    // Q2: “Ты — мой личный сорт героина” (и далее Эдвард)
-    // Q3: “Ты — лучшее, что со мной случалось!”
-    // Q4: “Ты — самая красивая...”
-    // Q5: “Спасибо за твою поддержку!”
-    var qId = qIdx + 1;
-    var line = null;
-
+  function showComplimentLine(qId) {
+    var line = '';
     if (qId === 1) line = 'Ты — мой дом, даже когда мы не дома';
     if (qId === 2) line = 'Ты — мой личный сорт героина';
     if (qId === 3) line = 'Ты — лучшее, что со мной случалось!';
     if (qId === 4) line = 'Ты — самая красивая, умная, заботливая, понимающая и сексуальная женщина!';
     if (qId === 5) line = 'Спасибо за твою поддержку!';
 
-    // Показать “комплимент” прямо под вопросом? В ТЗ нет конкретного места.
-    // Поэтому делаем деликатно: показываем временную строку поверх зоны вопроса (как memLine).
     if (!line) return;
 
     var safeRoot = document.getElementById('safeRoot');
     if (!safeRoot) return;
 
-    // Удаляем предыдущую
     var old = document.getElementById('memLine');
     if (old) old.remove();
 
@@ -687,7 +644,6 @@
     el.className = 'memLine';
     el.textContent = line;
 
-    // вставим в верхнюю область (под topbar визуально)
     el.style.position = 'absolute';
     el.style.top = '92px';
     el.style.left = '0';
@@ -695,15 +651,14 @@
     el.style.display = 'grid';
     el.style.placeItems = 'center';
     el.style.pointerEvents = 'none';
+    el.style.zIndex = '11';
 
     safeRoot.appendChild(el);
+    requestAnimationFrame(function () { el.classList.add('memLine--show'); });
 
-    requestAnimationFrame(function () {
-      el.classList.add('memLine--show');
-    });
+    // Для Q2 строго 700ms; для остальных держим столько же, сколько toast hold (900ms)
+    var keepMs = (qId === 2) ? T.MEM_TEXT_MS : T.TOAST_HOLD_MS;
 
-    // держим ~700ms по ТЗ только для мем-текста (Q2), но остальные пусть тоже будут недолго
-    var keepMs = (qId === 2) ? T.MEM_TEXT_MS : 900;
     setTimeout(function () {
       if (!el || !el.parentNode) return;
       el.classList.remove('memLine--show');
@@ -716,12 +671,9 @@
   function runEdwardBlockIfNeeded() {
     if (state.quiz.edwardShown === true) return;
 
-    // Отмечаем сразу, чтобы пережило F5 даже если пользователь обновит в момент попапа
     state.quiz.edwardShown = true;
     saveState();
 
-    // Мем-комплимент для Q2 уже показан showMemLineIfNeeded (700ms).
-    // Затем pop-up “Эдвард Каллен” (scale-in + shake), кнопка “Окей”.
     setTimeout(function () {
       showEdwardModal();
     }, T.MEM_TEXT_MS);
@@ -735,28 +687,16 @@
       + '</div>'
       + '<img class="modalImg" src="' + escapeAttr(ASSETS.imgEdward) + '" alt="" />';
 
-    showModalCustom(html, UI.EDWARD_OK, function(){});
-  }
-
-  function holdWrongHighlight(answerIndex) {
-    var buttons = document.querySelectorAll('.answerBtn');
-    for (var i = 0; i < buttons.length; i++) {
-      var b = buttons[i];
-      var idx = parseInt(b.getAttribute('data-ans'), 10);
-      if (idx === answerIndex) b.classList.add('answerBtn--wrongHold');
+    var modalEl = showModalCustom(html, UI.EDWARD_OK, function(){});
+    if (modalEl) {
+      // shake 600ms (если reduce-motion — смягчим позже на Стадии 11)
+      requestAnimationFrame(function () {
+        modalEl.classList.add('modal--shake');
+      });
     }
   }
 
-  function clearWrongHighlight() {
-    var buttons = document.querySelectorAll('.answerBtn');
-    for (var i = 0; i < buttons.length; i++) {
-      buttons[i].classList.remove('answerBtn--wrongHold');
-    }
-  }
-
-  // =========================
-  // Toast
-  // =========================
+  // ===== Toast =====
 
   function showToast(text) {
     var toast = runtime.toastEl;
@@ -764,28 +704,23 @@
     if (!toast || !box) return;
 
     box.textContent = text;
-
     toast.classList.add('toast--show');
 
-    // ТЗ: появление 160ms, держим 900ms, исчезновение 160ms
     setTimeout(function () {
       toast.classList.remove('toast--show');
     }, T.TOAST_IN_MS + T.TOAST_HOLD_MS + T.TOAST_OUT_MS);
   }
 
-  // =========================
-  // Modal
-  // =========================
+  // ===== Modal =====
 
   function showModal(text, buttonText, onClose) {
-    var html = ''
-      + '<p class="modalText">' + escapeHtml(text) + '</p>';
-    showModalCustom(html, buttonText, onClose);
+    var html = '<p class="modalText">' + escapeHtml(text) + '</p>';
+    return showModalCustom(html, buttonText, onClose);
   }
 
   function showModalCustom(innerHtml, buttonText, onClose) {
     var overlay = runtime.overlayEl;
-    if (!overlay) return;
+    if (!overlay) return null;
 
     overlay.innerHTML = ''
       + '<div class="modal" id="modalRoot">'
@@ -798,6 +733,7 @@
 
     var ok = document.getElementById('modalOkBtn');
     var close = document.getElementById('modalCloseBtn');
+    var modalRoot = document.getElementById('modalRoot');
 
     function done() {
       overlay.classList.remove('overlay--show');
@@ -808,15 +744,14 @@
 
     ok.addEventListener('click', done);
     if (close) close.addEventListener('click', done);
+
+    return modalRoot;
   }
 
-  // =========================
-  // Q3 timer “миллионера” (decorative)
-  // =========================
+  // ===== Q3 timer =====
 
   function startQ3TimerIfNeeded() {
     stopQ3Timer();
-
     var qIdx = qIndexFromState();
     if (qIdx !== 2) return;
 
@@ -826,31 +761,22 @@
 
   function tickQ3Timer() {
     if (state.screenId !== 'quiz') return;
-    var qIdx = qIndexFromState();
-    if (qIdx !== 2) return;
+    if (qIndexFromState() !== 2) return;
 
     var el = document.getElementById('q3Timer');
-    if (!el) {
-      runtime.q3TimerRaf = requestAnimationFrame(tickQ3Timer);
-      return;
-    }
-
     var now = performance.now();
+
     var elapsed = now - runtime.q3TimerStartMs;
-    var loopMs = 60000; // 1:00 loop
+    var loopMs = 60000;
     var t = elapsed % loopMs;
     var leftMs = loopMs - t;
 
-    var sec = Math.floor(leftMs / 1000);
-    var mm = 1; // всегда 1:00 → 0:00 → loop, поэтому минуту показываем как 1/0? В ТЗ видим "1:00" декоративно.
-    // Счётчик делаем: 1:00 -> 0:00, но форматируем mm как Math.floor(sec/60) (0 или 1)
-    mm = Math.floor(sec / 60);
+    var sec = Math.floor(leftMs / 1000); // 60..0
+    var mm = Math.floor(sec / 60);       // 1..0
     var ss = sec % 60;
-
     var ss2 = (ss < 10 ? '0' : '') + ss;
 
-    // Рендер с двоеточием span (для пульса)
-    el.innerHTML = String(mm) + '<span class="quizTimerColon">:</span>' + ss2;
+    if (el) el.innerHTML = String(mm) + '<span class="quizTimerColon">:</span>' + ss2;
 
     runtime.q3TimerRaf = requestAnimationFrame(tickQ3Timer);
   }
@@ -860,44 +786,7 @@
     runtime.q3TimerRaf = 0;
   }
 
-  // =========================
-  // Global quiz hotkeys (bonus)
-  // =========================
-
-  function attachGlobalQuizHotkeys() {
-    document.addEventListener('keydown', function (e) {
-      if (!e) return;
-      if (state.screenId !== 'quiz') return;
-
-      // Не мешаем модалке
-      var overlay = runtime.overlayEl;
-      if (overlay && overlay.classList.contains('overlay--show')) return;
-
-      if (e.key === 'ArrowLeft') {
-        var qIdx = qIndexFromState();
-        if (qIdx > 0) {
-          state.quiz.currentQuestion = qIdx;
-          saveState();
-          renderScreen();
-        }
-      }
-
-      if (e.key === 'ArrowRight') {
-        if (canGoNextFromCurrent()) {
-          var qIdx2 = qIndexFromState();
-          if (qIdx2 < 4) {
-            state.quiz.currentQuestion = qIdx2 + 2;
-            saveState();
-            renderScreen();
-          }
-        }
-      }
-    }, true);
-  }
-
-  // =========================
-  // Audio
-  // =========================
+  // ===== Audio =====
 
   function startMusicFromUserGesture() {
     if (!runtime.musicEl) {
@@ -951,9 +840,7 @@
     document.addEventListener('keydown', onKeyDown, true);
   }
 
-  // =========================
-  // LOADING preload
-  // =========================
+  // ===== LOADING preload =====
 
   function renderLoading() {
     var wrap = document.createElement('div');
@@ -1111,9 +998,7 @@
     }
   }
 
-  // =========================
-  // Utils
-  // =========================
+  // ===== utils =====
 
   function clamp01(x) {
     if (x < 0) return 0;
@@ -1127,10 +1012,6 @@
     if (v < min) v = min;
     if (v > max) v = max;
     return v;
-  }
-
-  function isDev() {
-    return new URLSearchParams(location.search).get('dev') === '1';
   }
 
   function escapeHtml(s) {
