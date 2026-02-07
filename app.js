@@ -889,7 +889,7 @@ function moveNoButton(isFirstNudge) {
 
   function clampLocal(v, mn, mx) { return v < mn ? mn : (v > mx ? mx : v); }
 
-  // Случайная добавка (всегда определена, это фиксит твою ошибку)
+  // Случайная добавка
   var jitter = (isFirstNudge === true) ? 18 : 44;
   var jx = (Math.random() * 2 - 1) * jitter;
   var jy = (Math.random() * 2 - 1) * jitter;
@@ -927,7 +927,7 @@ function moveNoButton(isFirstNudge) {
       }
     }
 
-    // если не нашли идеальную точку — всё равно прыгаем в последнюю
+    // если не нашли идеальную точку — всё равно прыгаем
     noBtn.style.left = Math.round(clampLocal(curLeft + jx * 4, leftMin, leftMax)) + 'px';
     noBtn.style.top  = Math.round(clampLocal(curTop  + jy * 4, topMin, topMax)) + 'px';
     return;
@@ -959,7 +959,7 @@ function moveNoButton(isFirstNudge) {
   var nextTop  = curTop  + dy * step + py * orbit * orbitSign + jy;
 
   nextLeft = clampLocal(nextLeft, leftMin, leftMax);
-  nextTop  = clampLocal(nextTop,  topMin,  topMax);
+  nextTop  = clampLocal(nextTop, topMin, topMax);
 
   noBtn.style.left = Math.round(nextLeft) + 'px';
   noBtn.style.top  = Math.round(nextTop) + 'px';
@@ -992,54 +992,95 @@ function moveNoButton(isFirstNudge) {
 
   // runtime.final добавим “на лету”, чтобы не трогать твой текущий runtime-объект сверху
   function setupFinalRuntime() {
-    teardownFinalRuntime();
+  teardownFinalRuntime();
 
-    var video = document.getElementById('finalVideo');
-    var canvas = document.getElementById('finalCanvas');
-    var hint = document.getElementById('finalHint');
-    var replayBtn = document.getElementById('finalReplay');
-    var clearBtn = document.getElementById('finalClearBalls');
+  var video = document.getElementById('finalVideo');
+  var canvas = document.getElementById('finalCanvas');
+  var hint = document.getElementById('finalHint');
+  var replayBtn = document.getElementById('finalReplay');
+  var clearBtn = document.getElementById('finalClearBalls');
 
-    if (!video || !canvas) return;
+  if (!video || !canvas) return;
 
-    runtime.final = {
-      videoEl: video,
-      canvasEl: canvas,
-      ctx: null,
-      raf: 0,
-      lastMs: 0,
-      lastVideoT: 0,
+  runtime.final = {
+    videoEl: video,
+    canvasEl: canvas,
+    ctx: null,
+    raf: 0,
+    lastMs: 0,
+    lastVideoT: 0,
 
-      balls: [],
-      ballsStarted: false,
-      ballsFade01: 1,
-      fadeMode: 0, // 0 none, 1 fade-out
+    balls: [],
+    ballsStarted: false,
+    ballsFade01: 1,
+    fadeMode: 0, // 0 none, 1 fade-out
 
-      hintEl: hint,
-      hintShown: false,
-      hintAt: 6.0,
+    hintEl: hint,
+    hintShown: false,
+    hintAt: 6.0,
 
-      onResize: null
-    };
+    ballImg: null,
+    ballImgReady: false,
 
-    runtime.final.ctx = canvas.getContext('2d');
+    tripleCount: 0,
+    tripleLastMs: 0,
 
-    runtime.final.onResize = function () {
-      finalResizeCanvas();
-    };
-    window.addEventListener('resize', runtime.final.onResize);
+    onResize: null,
+    onPointerDown: null
+  };
 
-    if (replayBtn) {
-      replayBtn.addEventListener('click', function () {
-        finalRestartSequence();
-      });
+  runtime.final.ctx = canvas.getContext('2d');
+
+  // PNG шар
+  runtime.final.ballImg = new Image();
+  runtime.final.ballImg.onload = function () {
+    if (runtime.final) runtime.final.ballImgReady = true;
+  };
+  runtime.final.ballImg.onerror = function () {
+    if (runtime.final) runtime.final.ballImgReady = false;
+  };
+  runtime.final.ballImg.src = ASSETS.imgHeartBall;
+
+  // клики по шарам (задел под Стадию 9)
+  runtime.final.onPointerDown = function (ev) {
+    if (!runtime.final) return;
+    var rect = canvas.getBoundingClientRect();
+    var x = ev.clientX - rect.left;
+    var y = ev.clientY - rect.top;
+
+    var hit = finalHitBall(x, y);
+    if (!hit) return;
+
+    var now = performance.now();
+    if (now - runtime.final.tripleLastMs <= 650) runtime.final.tripleCount++;
+    else runtime.final.tripleCount = 1;
+    runtime.final.tripleLastMs = now;
+
+    if (runtime.final.tripleCount >= 3) {
+      runtime.final.tripleCount = 0;
+      triggerEasterFromFinal(hit);
     }
+  };
+  canvas.addEventListener('pointerdown', runtime.final.onPointerDown);
 
-    if (clearBtn) {
-      clearBtn.addEventListener('click', function () {
-        finalFadeOutBalls();
-      });
-    }
+  runtime.final.onResize = function () { finalResizeCanvas(); };
+  window.addEventListener('resize', runtime.final.onResize);
+
+  if (replayBtn) replayBtn.addEventListener('click', finalRestartSequence);
+  if (clearBtn) clearBtn.addEventListener('click', finalFadeOutBalls);
+
+  // autoplay: play() возвращает Promise и может быть отклонён, поэтому catch обязателен [web:17]
+  video.muted = true;
+  video.loop = true;
+  video.play().catch(function(){});
+
+  finalResizeCanvas();
+
+  runtime.final.lastMs = performance.now();
+  runtime.final.lastVideoT = 0;
+
+  runtime.final.raf = requestAnimationFrame(finalTick);
+}
 
     // autoplay (без звука — muted already)
     video.muted = true;
@@ -1055,13 +1096,17 @@ function moveNoButton(isFirstNudge) {
   }
 
   function teardownFinalRuntime() {
-    if (!runtime.final) return;
+  if (!runtime.final) return;
 
-    if (runtime.final.raf) cancelAnimationFrame(runtime.final.raf);
-    if (runtime.final.onResize) window.removeEventListener('resize', runtime.final.onResize);
+  if (runtime.final.raf) cancelAnimationFrame(runtime.final.raf);
+  if (runtime.final.onResize) window.removeEventListener('resize', runtime.final.onResize);
 
-    runtime.final = null;
+  if (runtime.final.canvasEl && runtime.final.onPointerDown) {
+    runtime.final.canvasEl.removeEventListener('pointerdown', runtime.final.onPointerDown);
   }
+
+  runtime.final = null;
+}
 
   function finalResizeCanvas() {
     if (!runtime.final) return;
@@ -1077,6 +1122,24 @@ function moveNoButton(isFirstNudge) {
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
+
+function finalHitBall(x, y) {
+  if (!runtime.final || !runtime.final.balls) return null;
+
+  // ищем с конца: визуально “верхний” шар будет последним отрисованным
+  for (var i = runtime.final.balls.length - 1; i >= 0; i--) {
+    var b = runtime.final.balls[i];
+    var dx = x - b.x;
+    var dy = y - b.y;
+    if (dx*dx + dy*dy <= b.r*b.r) return b;
+  }
+  return null;
+}
+
+// Заглушка под Стадию 9: пока просто лог в консоль, потом заменим на настоящую пасхалку
+function triggerEasterFromFinal(ball) {
+  console.log('EASTER TRIGGER on ball id=', ball && ball.id);
+}
 
   function finalTick(nowMs) {
     if (!runtime.final) return;
@@ -1297,37 +1360,44 @@ function moveNoButton(isFirstNudge) {
   }
 
   function finalDraw() {
-    if (!runtime.final) return;
+  if (!runtime.final) return;
 
-    var ctx = runtime.final.ctx;
-    var canvas = runtime.final.canvasEl;
-    if (!ctx || !canvas) return;
+  var ctx = runtime.final.ctx;
+  var canvas = runtime.final.canvasEl;
+  if (!ctx || !canvas) return;
 
-    var rect = canvas.getBoundingClientRect();
-    var w = rect.width;
-    var h = rect.height;
+  var rect = canvas.getBoundingClientRect();
+  var w = rect.width;
+  var h = rect.height;
 
-    ctx.clearRect(0, 0, w, h);
+  ctx.clearRect(0, 0, w, h);
 
-    var balls = runtime.final.balls;
-    if (!balls || balls.length === 0) return;
+  var balls = runtime.final.balls;
+  if (!balls || balls.length === 0) return;
 
-    var a01 = clamp01(runtime.final.ballsFade01);
+  var a01 = clamp01(runtime.final.ballsFade01);
 
-    for (var i = 0; i < balls.length; i++) {
-      var b = balls[i];
+  var img = runtime.final.ballImg;
+  var imgReady = runtime.final.ballImgReady === true;
 
+  for (var i = 0; i < balls.length; i++) {
+    var b = balls[i];
+
+    ctx.globalAlpha = 0.95 * a01;
+
+    if (imgReady && img) {
+      ctx.drawImage(img, b.x - b.r, b.y - b.r, b.r * 2, b.r * 2);
+    } else {
+      // fallback: круг, если PNG не загрузился
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-
-      ctx.fillStyle = 'hsla(' + b.hue + ', 85%, 62%, ' + (0.72 * a01) + ')';
+      ctx.fillStyle = 'hsla(' + b.hue + ', 85%, 62%, 0.72)';
       ctx.fill();
-
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(255,255,255,' + (0.22 * a01) + ')';
-      ctx.stroke();
     }
+
+    ctx.globalAlpha = 1;
   }
+}
   
   // ===== Q3 timer =====
 
@@ -1410,13 +1480,14 @@ function moveNoButton(isFirstNudge) {
 
   function preloadAssets(onProgress01) {
     var urls = [
-      ASSETS.audioMusic,
-      ASSETS.imgEdward,
-      ASSETS.imgTwilightFrame,
-      ASSETS.imgDogQ3,
-      ASSETS.imgRetroQ1,
-      ASSETS.imgKupidonQ4
-    ];
+  ASSETS.audioMusic,
+  ASSETS.imgEdward,
+  ASSETS.imgTwilightFrame,
+  ASSETS.imgDogQ3,
+  ASSETS.imgRetroQ1,
+  ASSETS.imgKupidonQ4,
+  ASSETS.imgHeartBall
+];
 
     var done = 0;
     function markDone() {
