@@ -1259,7 +1259,7 @@ function triggerEasterFromFinal(ball) {
     baseR: baseR,
     w: w,
     h: h,
-    nextIn: 0.15 + Math.random() * 0.25  // быстрее начинаем
+    nextIn: 0.15 + Math.random() * 0.25
   };
 }
 
@@ -1308,28 +1308,28 @@ function finalUpdateBalls(dt) {
 
     for (var k = 0; k < batch; k++) {
       var baseR = runtime.final.spawn.baseR;
-      var rr = baseR * (0.80 + Math.random() * 0.50); // больше вариации
+      var rr = baseR * (0.80 + Math.random() * 0.50);
 
-      // Спавн ближе к центру для лучшего распределения
-      var centerBias = 0.3;
-      var rx = Math.random();
-      rx = rx < 0.5 
-        ? rx * (1 + centerBias) 
-        : 1 - (1 - rx) * (1 + centerBias);
+      // ИСПРАВЛЕНО: равномерный спавн по всей ширине (без centerBias)
+      var x = rr + Math.random() * Math.max(1, (w - rr * 2));
       
-      var x = rr + rx * Math.max(1, (w - rr * 2));
-      var y = -rr - 20 - Math.random() * (h * 0.3); // ближе к верху
+      // ИСПРАВЛЕНО: появляются ГЛУБОКО за экраном сверху, 
+      // постепенно вылезают (от 0.5 до 1.5 высоты экрана выше)
+      var y = -rr - h * (0.5 + Math.random() * 1.0);
 
       balls.push({
         id: runtime.final.spawn.spawned + 1,
         r: rr,
         x: x,
         y: y,
-        vx: (Math.random() * 2 - 1) * 3,  // УМЕНЬШЕНО: лёгкий дрейф
+        vx: (Math.random() * 2 - 1) * 2,  // еще меньше дрейфа
         vy: 0,
         hue: Math.floor(Math.random() * 360),
-        // для подспущенности: мягкость индивидуальная
-        softness: 0.75 + Math.random() * 0.25
+        softness: 0.75 + Math.random() * 0.25,
+        
+        // ДОБАВЛЕНО: вращение
+        rotation: Math.random() * Math.PI * 2,  // начальный угол
+        angularVelocity: (Math.random() * 2 - 1) * 0.3  // медленное вращение
       });
 
       runtime.final.spawn.spawned++;
@@ -1340,16 +1340,17 @@ function finalUpdateBalls(dt) {
 
   if (balls.length === 0) return;
 
-  // --- ИСПРАВЛЕНА ФИЗИКА ---
-  var g = 180;          // УМЕНЬШЕНО: медленное падение воздушных шаров
-  var air = 0.975;      // УВЕЛИЧЕНО: сильное сопротивление воздуха
-  var bounce = 0.05;    // УМЕНЬШЕНО: почти нет отскока от стен
-  var groundFriction = 0.92; // больше трения
+  // --- ЕЩЕ МЕДЛЕННЕЕ ФИЗИКА ---
+  var g = 130;          // УМЕНЬШЕНО: еще медленнее падение
+  var air = 0.972;      // чуть больше сопротивления
+  var bounce = 0.03;    // УМЕНЬШЕНО: почти нет отскока
+  var groundFriction = 0.94; // еще больше трения
 
-  var maxVy = 280;      // УМЕНЬШЕНО: лимит вертикальной скорости
-  var maxVx = 60;       // УМЕНЬШЕНО: лимит горизонтальной
+  var maxVy = 250;      // УМЕНЬШЕНО: еще меньше макс. скорость
+  var maxVx = 50;       // УМЕНЬШЕНО
+  
+  var angularDrag = 0.98; // сопротивление вращению [web:20]
 
-  // УМЕНЬШЕНО до 1-2 substeps для стабильности
   var steps = Math.max(1, Math.min(2, Math.ceil(dt / 0.020)));
   var subDt = dt / steps;
 
@@ -1360,9 +1361,10 @@ function finalUpdateBalls(dt) {
 
       b.vy += g * subDt;
 
-      // Сильное демпфирование для мягких шаров
+      // Демпфирование
       b.vx *= air;
       b.vy *= air;
+      b.angularVelocity *= angularDrag; // тормозим вращение [web:20]
 
       // Клампинг скорости
       if (b.vy > maxVy) b.vy = maxVy;
@@ -1371,17 +1373,23 @@ function finalUpdateBalls(dt) {
 
       b.x += b.vx * subDt;
       b.y += b.vy * subDt;
+      
+      // ДОБАВЛЕНО: обновление угла вращения [web:15]
+      b.rotation += b.angularVelocity * subDt;
 
-      // walls - мягкие границы
+      // walls - мягкие границы + вращение от удара
       if (b.x - b.r < 0) { 
         b.x = b.r; 
         b.vx = Math.abs(b.vx) * bounce; 
-        b.vx *= 0.5; // доп. гашение
+        b.vx *= 0.5;
+        // добавляем вращение от удара [web:11]
+        b.angularVelocity += (Math.random() * 2 - 1) * 0.15;
       }
       if (b.x + b.r > w) { 
         b.x = w - b.r; 
         b.vx = -Math.abs(b.vx) * bounce;
         b.vx *= 0.5;
+        b.angularVelocity += (Math.random() * 2 - 1) * 0.15;
       }
 
       // ceiling
@@ -1389,6 +1397,7 @@ function finalUpdateBalls(dt) {
         b.y = b.r;
         b.vy = Math.abs(b.vy) * bounce;
         b.vy *= 0.5;
+        b.angularVelocity += (Math.random() * 2 - 1) * 0.10;
       }
 
       // floor - сильное успокоение
@@ -1398,13 +1407,13 @@ function finalUpdateBalls(dt) {
         b.vx *= groundFriction;
 
         // Полная остановка на полу
-        if (Math.abs(b.vy) < 15) b.vy = 0;
-        if (Math.abs(b.vx) < 3) b.vx = 0;
+        if (Math.abs(b.vy) < 10) b.vy = 0;
+        if (Math.abs(b.vx) < 2) b.vx = 0;
+        if (Math.abs(b.angularVelocity) < 0.05) b.angularVelocity = 0;
       }
     }
 
-    // --- ИСПРАВЛЕНЫ СТОЛКНОВЕНИЯ: мягкие, без резонанса ---
-    // ТОЛЬКО 1 итерация + мягкая коррекция
+    // --- ЕЩЕ МЯГЧЕ СТОЛКНОВЕНИЯ: убираем дрожание ---
     for (var a = 0; a < balls.length; a++) {
       for (var c = a + 1; c < balls.length; c++) {
         var A = balls[a];
@@ -1423,10 +1432,9 @@ function finalUpdateBalls(dt) {
 
         var overlap = (minD - dist);
         
-        // ИСПРАВЛЕНО: мягкая позиционная коррекция
-        // Используем softness для эффекта "мятости"
+        // ИСПРАВЛЕНО: еще мягче коррекция [web:17]
         var avgSoft = (A.softness + B.softness) * 0.5;
-        var corr = overlap * 0.30 * avgSoft; // УМЕНЬШЕНО с 0.52
+        var corr = overlap * 0.25 * avgSoft; // УМЕНЬШЕНО с 0.30
         
         A.x -= nx * corr;
         A.y -= ny * corr;
@@ -1440,22 +1448,37 @@ function finalUpdateBalls(dt) {
         
         if (velAlong > 0) continue;
 
-        // Почти нулевой отскок - шары "липнут"
-        var restitution = 0.02 * avgSoft; // УМЕНЬШЕНО с 0.06
+        // УМЕНЬШЕНО: почти нет отскока
+        var restitution = 0.01 * avgSoft; // УМЕНЬШЕНО с 0.02
         var j = -(1.0 + restitution) * velAlong;
-        j *= 0.08; // УМЕНЬШЕНО с 0.22 - ключевое исправление!
+        j *= 0.05; // УМЕНЬШЕНО с 0.08 - убирает резонанс [web:17]
 
-        A.vx -= j * nx * 0.5; // делим на 2 для равной массы
+        A.vx -= j * nx * 0.5;
         A.vy -= j * ny * 0.5;
         B.vx += j * nx * 0.5;
         B.vy += j * ny * 0.5;
 
-        // УСИЛЕНО: сильное гашение после контакта
-        var contactDamp = 0.92; // было 0.985
+        // УСИЛЕНО: очень сильное гашение [web:20]
+        var contactDamp = 0.88; // УМЕНЬШЕНО с 0.92
         A.vx *= contactDamp; 
         A.vy *= contactDamp;
         B.vx *= contactDamp; 
         B.vy *= contactDamp;
+        
+        // ДОБАВЛЕНО: вращение от столкновения [web:11]
+        // Тангенциальная компонента для вращения
+        var tx = -ny;
+        var ty = nx;
+        var tangentVel = rvx * tx + rvy * ty;
+        
+        // Очень медленное вращение от касания
+        var angularImpulse = tangentVel / (A.r + B.r) * 0.08;
+        A.angularVelocity -= angularImpulse;
+        B.angularVelocity += angularImpulse;
+        
+        // Гасим угловую скорость
+        A.angularVelocity *= 0.95;
+        B.angularVelocity *= 0.95;
       }
     }
   }
