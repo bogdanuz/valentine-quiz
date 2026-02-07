@@ -1292,11 +1292,6 @@ function triggerEasterFromFinal(ball) {
     }
   }
 
-    runtime.final.ballsStarted = false;
-    runtime.final.hintShown = false;
-    finalHideHint();
-  }
-
   function finalFadeOutBalls() {
     if (!runtime.final) return;
     runtime.final.fadeMode = 1;
