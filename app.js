@@ -229,6 +229,23 @@
         setupGlobalResetOnce();
   }
 
+  function setupMusicAutoResume() {
+  if (!state || !state.audio || !state.audio.musicStarted) return;
+
+  var fired = false;
+  function resume() {
+    if (fired) return;
+    fired = true;
+    startMusicFromUserGesture();
+  }
+
+  document.addEventListener('pointerdown', resume, { once: true });
+  document.addEventListener('keydown', resume, { once: true });
+  document.addEventListener('touchstart', resume, { once: true, passive: true });
+}
+
+  setupMusicAutoResume();
+
   function goToScreen(screenId) {
     if (state.screenId === screenId) return;
 
@@ -1220,13 +1237,14 @@ function triggerEasterFromFinal(ball) {
     var w = rect.width;
     var h = rect.height;
 
-    var baseR = Math.sqrt((w * h) / (count * Math.PI)) * 0.72;
-    if (!isFinite(baseR)) baseR = 26;
-    baseR = clamp(baseR, 14, 54);
+    // Огромные шары под размер экрана (на ТВ/большом мониторе будут ещё больше)
+var baseR = Math.min(w, h) * 0.16;
+if (!isFinite(baseR)) baseR = 120;
+baseR = clamp(baseR, 70, 260);
 
     var balls = [];
     for (var i = 0; i < count; i++) {
-      var rr = baseR * (0.75 + Math.random() * 0.55);
+      var rr = baseR * (0.85 + Math.random() * 0.45);
 
       balls.push({
         id: i + 1,
@@ -1265,10 +1283,10 @@ function triggerEasterFromFinal(ball) {
     var w = rect.width;
     var h = rect.height;
 
-    var g = 2400; // “легкие, но ощутимые”
-    var air = 0.992;
-    var bounce = 0.62;
-    var groundFriction = 0.985;
+    var g = 3800;          // сильнее гравитация
+    var air = 0.9965;      // меньше затухание в воздухе
+    var bounce = 0.72;     // более “упруго”
+    var groundFriction = 0.992; // меньше торможение по полу
 
     // substeps для стабильности
     var steps = Math.max(1, Math.ceil(dt / 0.016));
