@@ -1,0 +1,77 @@
+:root{
+  --stage-w: 1440;
+  --stage-h: 810;
+
+  --safe-x: 80px;
+  --safe-y: 60px;
+
+  --bg1: #0b0f1f;
+  --bg2: #1a1f3a;
+
+  --btn-bg: rgba(255,255,255,0.12);
+  --btn-bg-hover: rgba(255,255,255,0.18);
+  --btn-border: rgba(255,255,255,0.22);
+  --text: rgba(255,255,255,0.92);
+}
+
+*{ box-sizing: border-box; }
+
+html, body{
+  height: 100%;
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--text);
+  background: radial-gradient(1200px 800px at 30% 20%, rgba(255,80,140,0.20), transparent 55%),
+              radial-gradient(900px 700px at 70% 60%, rgba(90,140,255,0.18), transparent 60%),
+              linear-gradient(160deg, var(--bg1), var(--bg2));
+  overflow: hidden;
+}
+
+.app{
+  height: 100%;
+  width: 100%;
+  display: grid;
+  place-items: center;
+}
+
+/* 16:9 сцена */
+.stage{
+  width: min(100vw, calc(100vh * (16 / 9)));
+  height: min(100vh, calc(100vw * (9 / 16)));
+  aspect-ratio: 16 / 9;
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  background: radial-gradient(900px 600px at 50% 30%, rgba(255,255,255,0.06), transparent 60%);
+  box-shadow: 0 20px 80px rgba(0,0,0,0.35);
+}
+
+.safe{
+  position: absolute;
+  left: var(--safe-x);
+  right: var(--safe-x);
+  top: var(--safe-y);
+  bottom: var(--safe-y);
+  display: grid;
+  place-items: center;
+}
+
+.btn{
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  padding: 14px 22px;
+  font-size: 18px;
+  border-radius: 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.btn:hover{ background: var(--btn-bg-hover); }
+.btn:active{ transform: scale(0.98); }
+
+.btn:focus-visible{
+  outline: 2px solid rgba(255,255,255,0.65);
+  outline-offset: 3px;
+}
