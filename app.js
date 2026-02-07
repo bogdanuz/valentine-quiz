@@ -327,7 +327,6 @@
 
     btn.addEventListener('click', function () {
       startMusicFromUserGesture();
-      zoomBackgroundIn();
       goToScreen('prologue');
     });
 
