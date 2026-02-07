@@ -298,7 +298,6 @@
     // ВАЖНО: больше не показываем “плашку-плейсхолдер” в прологе (она путала).
     // Оставляем только спейсеры + якорь.
     wrap.innerHTML = ''
-      + '<div class="prologueSpacerTop"></div>'
       + '<section class="prologueGreetingSection" id="prologueGreeting">'
       + '  <div class="prologueGreetingCard">' + escapeHtml(FIXED.PROLOGUE) + '</div>'
       + '</section>'
