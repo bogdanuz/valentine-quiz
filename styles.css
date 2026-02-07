@@ -535,7 +535,7 @@ html, body{
   font-size: 22px;
   padding: 16px 18px;
   position: absolute;
-  transition: left 180ms ease-out, top 180ms ease-out, transform 120ms ease;
+  transition: left 120ms cubic-bezier(.2, .9, .2, 1), top 120ms cubic-bezier(.2, .9, .2, 1), transform 90ms ease;
   will-change: left, top;
 }
 
