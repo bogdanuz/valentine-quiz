@@ -685,18 +685,23 @@
   // ===== CLIMAX =====
 
   function renderClimax() {
-    var wrap = document.createElement('div');
-    wrap.className = 'climaxWrap';
+  var wrap = document.createElement('div');
+  wrap.className = 'climaxWrap';
 
-    wrap.innerHTML = ''
-      + '<div class="climaxQ">' + escapeHtml(FIXED.CLIMAX_Q) + '</div>'
-      + '<div class="climaxArena" id="climaxArena">'
-      + '  <button class="btn climaxYes" id="yesBtn" type="button">' + escapeHtml(UI.YES) + '</button>'
-      + '  <button class="btn climaxNo" id="noBtn" type="button">' + escapeHtml(UI.NO) + '</button>'
-      + '</div>';
+  wrap.innerHTML = ''
+    + '<div class="climaxInner">'
+    + '  <div class="climaxQ">' + escapeHtml(FIXED.CLIMAX_Q) + '</div>'
+    + '  <div class="climaxArena" id="climaxArena">'
+    + '    <div class="climaxSparkles"></div>'
+    + '    <div class="climaxControls">'
+    + '      <button class="btn climaxYes" id="yesBtn" type="button">' + escapeHtml(UI.YES) + '</button>'
+    + '      <button class="btn climaxNo" id="noBtn" type="button">' + escapeHtml(UI.NO) + '</button>'
+    + '    </div>'
+    + '  </div>'
+    + '</div>';
 
-    return wrap;
-  }
+  return wrap;
+}
 
   function setupClimaxRuntime() {
     var arena = document.getElementById('climaxArena');
@@ -707,6 +712,7 @@
     runtime.climax.arenaEl = arena;
     runtime.climax.yesBtn = yesBtn;
     runtime.climax.noBtn = noBtn;
+    runtime.climax.firstNudgeDone = false;
 
     yesBtn.addEventListener('click', function () {
       goToScreen('final');
@@ -718,9 +724,20 @@
         ev.preventDefault();
         ev.stopPropagation();
       }
-      moveNoButton();
+      moveNoButton(false);
     };
 
+var onArenaMove = function (ev) {
+  if (runtime.climax.firstNudgeDone) return;
+
+  // как только курсор/палец двинулся в зоне — сдвигаем "НЕТ" один раз
+  runtime.climax.firstNudgeDone = true;
+  moveNoButton(true);
+};
+
+arena.addEventListener('pointermove', onArenaMove, { passive: true });
+runtime.climax.onArenaMove = onArenaMove;
+    
     noBtn.addEventListener('pointerenter', run);
     noBtn.addEventListener('pointerdown', run);
 
@@ -737,6 +754,11 @@
 
   function teardownClimaxRuntime() {
     if (runtime.climax.onResize) window.removeEventListener('resize', runtime.climax.onResize);
+    if (runtime.climax.arenaEl && runtime.climax.onArenaMove) {
+  runtime.climax.arenaEl.removeEventListener('pointermove', runtime.climax.onArenaMove);
+}
+runtime.climax.onArenaMove = null;
+runtime.climax.firstNudgeDone = false;
 
     runtime.climax.arenaEl = null;
     runtime.climax.yesBtn = null;
@@ -768,45 +790,49 @@
     noBtn.style.top = Math.round(top) + 'px';
   }
 
-  function moveNoButton() {
-    var arena = runtime.climax.arenaEl;
-    var yesBtn = runtime.climax.yesBtn;
-    var noBtn = runtime.climax.noBtn;
-    if (!arena || !yesBtn || !noBtn) return;
+  function moveNoButton(isFirstNudge) {
+  var arena = runtime.climax.arenaEl;
+  var yesBtn = runtime.climax.yesBtn;
+  var noBtn = runtime.climax.noBtn;
+  if (!arena || !yesBtn || !noBtn) return;
 
-    state.climax.noRunCount = (state.climax.noRunCount || 0) + 1;
-    saveState();
+  state.climax.noRunCount = (state.climax.noRunCount || 0) + 1;
+  saveState();
 
-    var a = arena.getBoundingClientRect();
-    var y = yesBtn.getBoundingClientRect();
-    var n = noBtn.getBoundingClientRect();
+  var a = arena.getBoundingClientRect();
+  var y = yesBtn.getBoundingClientRect();
+  var n = noBtn.getBoundingClientRect();
 
-    var maxLeft = Math.max(8, a.width - n.width - 8);
-    var maxTop = Math.max(8, a.height - n.height - 8);
+  var maxLeft = Math.max(8, a.width - n.width - 8);
+  var maxTop = Math.max(8, a.height - n.height - 8);
 
-    var yesCx = (y.left - a.left) + y.width / 2;
-    var yesCy = (y.top - a.top) + y.height / 2;
+  var yesCx = (y.left - a.left) + y.width / 2;
+  var yesCy = (y.top - a.top) + y.height / 2;
 
-    var left = 8, top = 8;
-    var tries = 0;
+  // Первый “подпрыг” делаем мягче (чтобы не улетало далеко),
+  // дальше — убегает сильнее
+  var minDist = (isFirstNudge === true) ? 120 : 170;
 
-    while (tries < 24) {
-      tries++;
-      left = 8 + Math.random() * (maxLeft - 8);
-      top = 8 + Math.random() * (maxTop - 8);
+  var left = 8, top = 8;
+  var tries = 0;
 
-      var noCx = left + n.width / 2;
-      var noCy = top + n.height / 2;
+  while (tries < 24) {
+    tries++;
+    left = 8 + Math.random() * (maxLeft - 8);
+    top = 8 + Math.random() * (maxTop - 8);
 
-      var dx = noCx - yesCx;
-      var dy = noCy - yesCy;
+    var noCx = left + n.width / 2;
+    var noCy = top + n.height / 2;
 
-      if (Math.sqrt(dx*dx + dy*dy) > 170) break;
-    }
+    var dx = noCx - yesCx;
+    var dy = noCy - yesCy;
 
-    noBtn.style.left = Math.round(left) + 'px';
-    noBtn.style.top = Math.round(top) + 'px';
+    if (Math.sqrt(dx*dx + dy*dy) > minDist) break;
   }
+
+  noBtn.style.left = Math.round(left) + 'px';
+  noBtn.style.top = Math.round(top) + 'px';
+}
 
   // ===== Q3 timer =====
 
