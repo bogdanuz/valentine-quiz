@@ -1248,7 +1248,7 @@ function triggerEasterFromFinal(ball) {
   var w = rect.width;
   var h = rect.height;
 
-  // Огромные шары под размер экрана (на ТВ/большом мониторе будут ещё больше)
+  // Огромные шары под размер экрана
   var baseR = Math.min(w, h) * 0.16;
   if (!isFinite(baseR)) baseR = 120;
   baseR = clamp(baseR, 70, 260);
@@ -1257,14 +1257,17 @@ function triggerEasterFromFinal(ball) {
   for (var i = 0; i < count; i++) {
     var rr = baseR * (0.85 + Math.random() * 0.45);
 
+    // Равномернее по ширине, чтобы не было "комка" и стартовых пересечений
+    var x = ((i + 0.5) / count) * w + (Math.random() * 2 - 1) * rr * 0.25;
+
     balls.push({
       id: i + 1,
       r: rr,
-      x: Math.random() * w,
-      y: -Math.random() * (h * 0.9) - rr - 10,
+      x: clamp(x, rr, w - rr),
+      y: -rr - 20 - Math.random() * h * 1.2,
 
-      // было "комариное" движение — делаем лёгкий дрейф + нулевой старт вниз
-      vx: (Math.random() * 2 - 1) * 18,
+      // почти без боковой скорости
+      vx: (Math.random() * 2 - 1) * 6,
       vy: 0,
 
       hue: Math.floor(Math.random() * 360)
@@ -1277,7 +1280,7 @@ function triggerEasterFromFinal(ball) {
 function finalUpdateBalls(dt) {
   if (!runtime.final) return;
 
-  // fade-out (растворение шаров)
+  // fade-out
   if (runtime.final.fadeMode === 1) {
     runtime.final.ballsFade01 -= dt / 0.35;
     if (runtime.final.ballsFade01 <= 0) {
@@ -1297,104 +1300,67 @@ function finalUpdateBalls(dt) {
   var w = rect.width;
   var h = rect.height;
 
-  // "Воздушные" настройки: мягче вниз, сильнее демпфирование, слабый отскок
-  var g = 1350;
-  var air = 0.985;
-  var bounce = 0.28;
-  var groundFriction = 0.96;
+  // "Земное" падение в пикселях: умеренно, чтобы успевал рассмотреть
+  var g = 1600;
 
-  // ограничение скорости, чтобы не разгонялись до "урагана"
-  var maxV = 1600;
+  // сопротивление воздуха (чтобы было плавно, как у шаров)
+  var air = 0.992;
 
-  // substeps для стабильности (чуть чаще, меньше дрожания)
-  var steps = Math.max(1, Math.ceil(dt / 0.012));
+  // слабый отскок (шары не должны быть резиновыми мячами)
+  var bounce = 0.22;
+  var groundFriction = 0.90;
+
+  // ограничение скорости (главное, чтобы не превращалось в ураган)
+  var maxVy = 900;
+  var maxVx = 160;
+
+  // стабильная интеграция
+  var steps = Math.max(1, Math.ceil(dt / 0.016));
   var subDt = dt / steps;
 
   for (var s = 0; s < steps; s++) {
-    // integrate
     for (var i = 0; i < balls.length; i++) {
       var b = balls[i];
 
+      // гравитация
       b.vy += g * subDt;
 
-      // демпфирование
+      // сопротивление
       b.vx *= air;
       b.vy *= air;
 
-      // ограничим скорости
-      if (b.vx > maxV) b.vx = maxV;
-      if (b.vx < -maxV) b.vx = -maxV;
-      if (b.vy > maxV) b.vy = maxV;
-      if (b.vy < -maxV) b.vy = -maxV;
+      // лимиты скоростей
+      if (b.vy > maxVy) b.vy = maxVy;
+      if (b.vx > maxVx) b.vx = maxVx;
+      if (b.vx < -maxVx) b.vx = -maxVx;
 
+      // движение
       b.x += b.vx * subDt;
       b.y += b.vy * subDt;
 
-      // walls
+      // стены
       if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx) * bounce; }
       if (b.x + b.r > w) { b.x = w - b.r; b.vx = -Math.abs(b.vx) * bounce; }
 
-      // floor / ceiling
+      // потолок (на всякий)
+      if (b.y - b.r < 0) {
+        b.y = b.r;
+        b.vy = Math.abs(b.vy) * bounce;
+      }
+
+      // пол
       if (b.y + b.r > h) {
         b.y = h - b.r;
         b.vy = -Math.abs(b.vy) * bounce;
         b.vx *= groundFriction;
 
-        // "успокоение" у пола, чтобы не дрожали бесконечно
-        if (Math.abs(b.vy) < 70) b.vy = 0;
-        if (Math.abs(b.vx) < 18) b.vx = 0;
-      }
-      if (b.y - b.r < 0) {
-        b.y = b.r;
-        b.vy = Math.abs(b.vy) * bounce;
+        // "успокоение" чтобы не дрожали на полу
+        if (Math.abs(b.vy) < 40) b.vy = 0;
+        if (Math.abs(b.vx) < 10) b.vx = 0;
       }
     }
 
-    // collisions O(n^2)
-    for (var a = 0; a < balls.length; a++) {
-      for (var c = a + 1; c < balls.length; c++) {
-        var A = balls[a];
-        var B = balls[c];
-
-        var dx = B.x - A.x;
-        var dy = B.y - A.y;
-        var dist2 = dx*dx + dy*dy;
-        var minD = A.r + B.r;
-
-        if (dist2 <= 0 || dist2 >= minD*minD) continue;
-
-        var dist = Math.sqrt(dist2) || 0.0001;
-        var nx = dx / dist;
-        var ny = dy / dist;
-
-        // раздвигаем сильнее (меньше "дрожания" от застреваний)
-        var overlap = (minD - dist);
-        var push = overlap * 0.78;
-        A.x -= nx * push;
-        A.y -= ny * push;
-        B.x += nx * push;
-        B.y += ny * push;
-
-        // мягкий импульс
-        var rvx = B.vx - A.vx;
-        var rvy = B.vy - A.vy;
-        var velAlong = rvx * nx + rvy * ny;
-        if (velAlong > 0) continue;
-
-        var restitution = 0.18;
-        var j = -(1.0 + restitution) * velAlong;
-        j *= 0.38;
-
-        A.vx -= j * nx;
-        A.vy -= j * ny;
-        B.vx += j * nx;
-        B.vy += j * ny;
-
-        // доп. демпфирование после столкновения
-        A.vx *= 0.94; A.vy *= 0.94;
-        B.vx *= 0.94; B.vy *= 0.94;
-      }
-    }
+    // ВАЖНО: collisions шар-шар отключены намеренно, чтобы не было "роя"
   }
 }
 
