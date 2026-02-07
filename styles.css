@@ -8,9 +8,6 @@
   --btn-bg-hover: rgba(255,255,255,0.18);
   --btn-border: rgba(255,255,255,0.22);
 
-  --card: rgba(255,255,255,0.10);
-  --card-border: rgba(255,255,255,0.16);
-
   --t-base: 280ms;     /* базовые переходы 250–300ms по ТЗ */
   --t-zoom: 400ms;     /* START → ПРОЛОГ: лёгкий zoom-in фона ~400ms */
 }
@@ -45,7 +42,7 @@ html, body{
   box-shadow: 0 20px 80px rgba(0,0,0,0.35);
 }
 
-/* Фон отдельным слоем, чтобы делать zoom + параллакс */
+/* Фон */
 .stageBg{
   position: absolute;
   inset: 0;
@@ -139,7 +136,7 @@ html, body{
   user-select: none;
 }
 
-/* ПРОЛОГ: скролл-контейнер внутри safe-zone */
+/* ПРОЛОГ */
 .prologueScroll{
   position: absolute;
   inset: 0;
@@ -183,6 +180,8 @@ html, body{
 .quizLayout{
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   display: grid;
   grid-template-rows: 54px 1fr;
   gap: 18px;
@@ -239,12 +238,15 @@ html, body{
   display: grid;
   grid-template-rows: 1fr 1fr;
   gap: 18px;
+  justify-items: center; /* центрируем содержимое */
 }
 
 .quizQuestionArea{
   align-self: start;
   display: grid;
   gap: 10px;
+  justify-items: center;
+  width: 100%;
 }
 
 .quizQuestionText{
@@ -252,13 +254,14 @@ html, body{
   line-height: 1.16;
   letter-spacing: 0.01em;
   max-width: 980px;
+  text-align: center;
 }
 
 .quizMediaRow{
   display: grid;
   gap: 10px;
   align-items: center;
-  justify-items: start;
+  justify-items: center;
 }
 
 .quizImage{
@@ -295,6 +298,7 @@ html, body{
   display: grid;
   gap: 10px;
   width: min(720px, 100%);
+  justify-items: stretch;
 }
 
 .answerBtn{
@@ -317,7 +321,7 @@ html, body{
   background: rgba(80, 220, 160, 0.14);
 }
 
-/* Q5 color plaque */
+/* Q5 plaque */
 .colorPlaque{
   display: grid;
   grid-template-columns: 64px 1fr;
@@ -328,6 +332,7 @@ html, body{
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.14);
   width: fit-content;
+  justify-self: center;
 }
 
 .colorSwatch{
@@ -343,17 +348,6 @@ html, body{
   opacity: 0.92;
 }
 
-/* Transitions внутри квиза */
-.qCard{
-  transform: scale(0.985);
-  opacity: 0;
-  transition: transform 260ms ease, opacity 260ms ease;
-}
-.qCard.qCard--active{
-  transform: scale(1);
-  opacity: 1;
-}
-
 /* Toast "ВЕРНО!" */
 .toast{
   position: absolute;
@@ -366,6 +360,7 @@ html, body{
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 160ms ease, transform 160ms ease;
+  z-index: 10;
 }
 
 .toast.toast--show{
@@ -390,6 +385,7 @@ html, body{
   display: none;
   place-items: center;
   background: rgba(0,0,0,0.35);
+  z-index: 20;
 }
 
 .overlay.overlay--show{
@@ -404,6 +400,32 @@ html, body{
   box-shadow: 0 24px 90px rgba(0,0,0,0.55);
   padding: 18px 18px 16px;
   backdrop-filter: blur(8px);
+
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity 260ms ease, transform 260ms ease;
+}
+
+.overlay.overlay--show .modal{
+  opacity: 1;
+  transform: scale(1);
+}
+
+@keyframes modalShake{
+  0%{ transform: scale(1) translateX(0); }
+  10%{ transform: scale(1) translateX(-7px); }
+  20%{ transform: scale(1) translateX(7px); }
+  30%{ transform: scale(1) translateX(-6px); }
+  40%{ transform: scale(1) translateX(6px); }
+  50%{ transform: scale(1) translateX(-4px); }
+  60%{ transform: scale(1) translateX(4px); }
+  70%{ transform: scale(1) translateX(-2px); }
+  80%{ transform: scale(1) translateX(2px); }
+  100%{ transform: scale(1) translateX(0); }
+}
+
+.modal.modal--shake{
+  animation: modalShake 600ms ease-in-out;
 }
 
 .modalHeader{
@@ -443,7 +465,7 @@ html, body{
   margin: 8px 0 14px;
 }
 
-/* Мем-комплимент вставка */
+/* Комплимент строкой */
 .memLine{
   font-size: 22px;
   letter-spacing: 0.01em;
