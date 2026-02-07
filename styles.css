@@ -430,3 +430,63 @@ html, body{
   from{ opacity: 0; transform: translateY(-50%) scale(0.62) rotate(-6deg); }
   to{ opacity: 1; transform: translateY(-50%) scale(0.86) rotate(2deg); }
 }
+
+/* ===== CLIMAX ===== */
+
+.climaxWrap{
+  width: min(980px, 100%);
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 26px;
+  justify-items: center;
+  align-content: center;
+}
+
+.climaxQ{
+  font-size: 44px;
+  line-height: 1.06;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+.climaxArena{
+  width: min(880px, 100%);
+  height: 220px;
+  position: relative;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  display: grid;
+  place-items: center;
+}
+
+.climaxYes{
+  width: min(360px, 92%);
+  font-size: 22px;
+  padding: 18px 22px;
+}
+
+.climaxNo{
+  position: absolute;
+  left: 58%;
+  top: 140px;
+  width: min(360px, 92%);
+  font-size: 22px;
+  padding: 18px 22px;
+  transition: left 280ms ease, top 280ms ease, transform 160ms ease;
+  will-change: left, top;
+}
+
+.climaxNo:active{
+  transform: scale(0.98);
+}
+
+/* ===== FINAL (заглушка) ===== */
+
+.finalText{
+  font-size: 44px;
+  text-align: center;
+  line-height: 1.08;
+  width: min(980px, 100%);
+}
