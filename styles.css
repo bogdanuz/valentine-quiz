@@ -12,6 +12,56 @@
   --t-zoom: 400ms;
 }
 
+/* Мобильная оптимизация */
+@media (max-width: 768px) {
+  :root{
+    --safe-x: 20px;
+    --safe-y: 20px;
+  }
+  
+  .stage{
+    border-radius: 0; /* Убираем скругление на мобилках */
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport для iOS */
+  }
+  
+  .quizTopbar{
+    height: 48px;
+    padding: 0 8px;
+  }
+  
+  .navBtn{
+    width: 40px;
+    height: 36px;
+  }
+  
+  .quizCounter{
+    font-size: 14px;
+  }
+  
+  .climaxArena{
+    height: 280px; /* Меньше на мобилках */
+  }
+  
+  .finalControls{
+    flex-direction: column; /* Кнопки друг под другом */
+    gap: 8px;
+  }
+  
+  .finalMiniBtn{
+    width: 100%;
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root{
+    --safe-x: 12px;
+    --safe-y: 12px;
+  }
+}
+
 *{ box-sizing: border-box; }
 
 html, body{
@@ -67,19 +117,16 @@ html, body{
   inset: 0;
   display: grid;
   place-items: center;
-  transform: translateX(0);
   opacity: 0;
-  transition: transform 240ms ease-out, opacity 240ms ease-out;
-  will-change: opacity, transform;
+  transition: opacity 0ms; /* УБРАНО: мерцание */
+  will-change: auto;
 }
 
 .screen.screen--out{
-  transform: translateX(-20px);
   opacity: 0;
 }
 
 .screen.screen--active{
-  transform: translateX(0);
   opacity: 1;
 }
 
@@ -162,14 +209,14 @@ html, body{
   padding: 0 10px;
 }
 .prologueGreetingCard{
-  width: min(980px, 100%);
-  padding: 28px 28px;
-  border-radius: 22px;
+  width: min(980px, 92%); /* ИСПРАВЛЕНО: 92% для мобилок */
+  padding: clamp(18px, 4vw, 28px);
+  border-radius: clamp(16px, 3vw, 22px);
   background: rgba(255,255,255,0.10);
   border: 1px solid rgba(255,255,255,0.16);
   box-shadow: 0 22px 80px rgba(0,0,0,0.35);
   backdrop-filter: blur(8px);
-  font-size: 30px;
+  font-size: clamp(20px, 4.5vw, 30px); /* АДАПТИВ */
   line-height: 1.18;
   letter-spacing: 0.01em;
   animation: prologueCardIn 280ms ease both;
@@ -235,21 +282,23 @@ html, body{
   height: 100%;
   width: 100%;
   display: grid;
-  grid-template-rows: auto auto;
-  align-items: start;
+  grid-template-rows: auto 1fr auto;
+  align-items: center; /* ИСПРАВЛЕНО: по центру */
   justify-items: center;
-  gap: 10px;
+  gap: 18px;
+  padding: 10px 0;
 }
 
 .quizQuestionArea{
   width: min(1120px, 100%);
   display: grid;
-  gap: 10px;
+  gap: 14px;
   justify-items: center;
+  align-self: end; /* ДОБАВЛЕНО: вопрос прижат к низу своей зоны */
 }
 
 .quizQuestionText{
-  font-size: 34px;
+  font-size: clamp(22px, 5vw, 34px); /* АДАПТИВ: от 22px до 34px */
   line-height: 1.14;
   letter-spacing: 0.01em;
   text-align: center;
@@ -264,11 +313,12 @@ html, body{
 }
 
 .quizImage{
-  width: min(680px, 100%);
+  width: min(680px, 90%); /* ИСПРАВЛЕНО: 90% для мобилок */
   max-width: 100%;
+  max-height: 40vh; /* ДОБАВЛЕНО: не больше 40% высоты экрана */
   height: auto;
   object-fit: contain;
-  border-radius: 22px;
+  border-radius: clamp(12px, 3vw, 22px); /* АДАПТИВ */
   border: 1px solid rgba(255,255,255,0.14);
   box-shadow: 0 20px 70px rgba(0,0,0,0.28);
 }
@@ -301,8 +351,8 @@ html, body{
   width: min(980px, 100%);
   display: grid;
   justify-items: center;
-  padding-bottom: 0px;
-  margin-top: 2px;
+  align-self: start; /* ДОБАВЛЕНО: ответы прижаты к верху своей зоны */
+  padding-bottom: 0;
 }
 
 .quizAnswersGrid{
@@ -322,9 +372,10 @@ html, body{
 .answerBtn{
   width: 100%;
   text-align: center;
-  padding: 16px 18px;
-  font-size: 18px;
-  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: clamp(16px, 3.5vw, 18px); /* АДАПТИВ */
+  border-radius: 14px;
+  min-height: 50px; /* ДОБАВЛЕНО: touch target */
 }
 
 .answerBtn.btn--wide{
@@ -459,7 +510,7 @@ html, body{
 }
 
 .climaxQ{
-  font-size: 84px;             /* ~в 2 раза больше, чем было */
+  font-size: clamp(36px, 8vw, 84px); /* АДАПТИВ: от 36px до 84px */
   font-weight: 750;
   line-height: 1.02;
   text-align: center;
@@ -533,16 +584,16 @@ html, body{
 }
 
 .climaxYes{
-  width: 240px;
-  font-size: 22px;
+  width: clamp(180px, 40vw, 240px); /* АДАПТИВ */
+  font-size: clamp(18px, 4vw, 22px);
   padding: 16px 18px;
   position: absolute;
   /* left/top зададим из JS, чтобы "ДА" и "НЕТ" стояли рядом */
 }
 
 .climaxNo{
-  width: 240px;
-  font-size: 22px;
+  width: clamp(180px, 40vw, 240px); /* АДАПТИВ */
+  font-size: clamp(18px, 4vw, 22px);
   padding: 16px 18px;
   position: absolute;
   transition: left 120ms cubic-bezier(.2, .9, .2, 1), top 120ms cubic-bezier(.2, .9, .2, 1), transform 90ms ease;
@@ -652,19 +703,19 @@ html, body{
 
 .finalHint{
   position: absolute;
-  left: 16px;
-  top: 16px;
-  max-width: min(520px, 70%);
-  padding: 10px 12px;
-  border-radius: 14px;
+  left: clamp(12px, 2vw, 16px);
+  top: clamp(12px, 2vw, 16px);
+  max-width: min(520px, 75%);
+  padding: clamp(8px, 1.5vw, 10px) clamp(10px, 2vw, 12px);
+  border-radius: clamp(10px, 2vw, 14px);
   background: rgba(10,12,22,0.62);
   border: 1px solid rgba(255,255,255,0.16);
-  font-size: 16px;
+  font-size: clamp(14px, 3vw, 16px); /* АДАПТИВ */
   line-height: 1.25;
   opacity: 0;
   transform: translateY(-6px);
   transition: opacity 220ms ease, transform 220ms ease;
-  animation: finalHintBlink 1.15s ease-in-out infinite;
+  animation: finalHintBlink 2.8s ease-in-out infinite; /* МЕДЛЕННЕЕ */
 }
 
 .finalHint.finalHint--show{
@@ -673,8 +724,8 @@ html, body{
 }
 
 @keyframes finalHintBlink{
-  0%, 100%{ filter: drop-shadow(0 0 0 rgba(255,255,255,0)); }
-  50%{ filter: drop-shadow(0 0 14px rgba(255,255,255,0.18)); }
+  0%, 100%{ filter: drop-shadow(0 0 8px rgba(255,255,255,0.12)); }
+  50%{ filter: drop-shadow(0 0 18px rgba(255,255,255,0.28)); }
 }
 
 .finalControls{
@@ -691,10 +742,12 @@ html, body{
   background: rgba(255,255,255,0.07);
   color: rgba(255,255,255,0.92);
   border-radius: 14px;
-  padding: 10px 14px;
+  padding: 12px 16px; /* УВЕЛИЧЕНО */
   cursor: pointer;
   transition: transform 160ms ease, background 160ms ease, opacity 160ms ease;
   opacity: 0.92;
+  min-height: 44px; /* ДОБАВЛЕНО: Apple standard touch target */
+  font-size: clamp(14px, 3vw, 16px); /* АДАПТИВ */
 }
 
 .finalMiniBtn:hover{ background: rgba(255,255,255,0.11); }
@@ -719,12 +772,12 @@ html, body{
   top: 50%;
   transform: translate(-50%, -50%);
   z-index: 4;
-  padding: 22px 28px;
-  border-radius: 22px;
+  padding: clamp(16px, 3vw, 22px) clamp(20px, 4vw, 28px);
+  border-radius: clamp(16px, 3vw, 22px);
   background: rgba(10,12,22,0.75);
   border: 1px solid rgba(255,255,255,0.22);
   backdrop-filter: blur(12px);
-  font-size: 44px;
+  font-size: clamp(24px, 5vw, 44px); /* АДАПТИВ */
   line-height: 1.08;
   text-align: center;
   opacity: 0;
@@ -744,15 +797,15 @@ html, body{
 .finalToast{
   position: absolute;
   left: 50%;
-  top: 80px;
+  top: clamp(60px, 10vh, 80px); /* АДАПТИВ */
   transform: translateX(-50%) translateY(-20px);
   z-index: 5;
-  padding: 14px 20px;
-  border-radius: 16px;
+  padding: clamp(10px, 2vw, 14px) clamp(14px, 3vw, 20px);
+  border-radius: clamp(12px, 2.5vw, 16px);
   background: rgba(10,12,22,0.85);
   border: 1px solid rgba(255,255,255,0.28);
   backdrop-filter: blur(10px);
-  font-size: 20px;
+  font-size: clamp(16px, 3.5vw, 20px); /* АДАПТИВ */
   letter-spacing: 0.02em;
   opacity: 0;
   transition: opacity 280ms ease, transform 280ms ease;
