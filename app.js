@@ -41,7 +41,10 @@
     videoWebm: 'assets/video/valentine.webm',
 
     // FX
-    imgHeartBall: 'assets/img/fx/heart-ball.png'
+    imgHeartBall: 'assets/img/fx/heart-ball.png',
+    
+    // EASTER (пасхалка)
+    imgNerpaDog: 'assets/img/easter/nerpa-dog-head.png'
   };
 
   var QUIZ = [
@@ -1009,6 +1012,8 @@ function moveNoButton(isFirstNudge) {
       + '<canvas class="finalCanvas" id="finalCanvas"></canvas>'
       + '<div class="finalHud">'
       + '  <div class="finalHint" id="finalHint">' + escapeHtml(FIXED.EASTER_HINT) + '</div>'
+      + '  <div class="finalCongrats" id="finalCongrats">' + escapeHtml(FIXED.FINAL_PHRASE) + '</div>'
+      + '  <div class="finalToast" id="finalToast">Режим «Бульдозер» активирован!</div>'
       + '  <div class="finalControls">'
       + '    <button class="finalMiniBtn" id="finalReplay" type="button">К валентинке</button>'
       + '    <button class="finalMiniBtn" id="finalClearBalls" type="button">Убрать шары</button>'
@@ -1087,7 +1092,7 @@ function setupFinalRuntime() {
   runtime.final.dogImg.onerror = function () {
     if (runtime.final) runtime.final.dogImgReady = false;
   };
-  runtime.final.dogImg.src = ASSETS.imgDogQ3;
+  runtime.final.dogImg.src = ASSETS.imgNerpaDog;
 
   runtime.final.onPointerDown = function (ev) {
     if (!runtime.final) return;
@@ -1179,16 +1184,20 @@ function triggerEasterFromFinal(ball) {
   var w = rect.width;
   var h = rect.height;
 
-  var dogW = Math.min(w, h) * 0.28;
+  // ИСПРАВЛЕНО: размер ×2 (было 0.28, стало 0.56)
+  var dogW = Math.min(w, h) * 0.56;
   var dogH = dogW * 0.85;
 
   runtime.final.dog = {
     x: w * 0.5,
-    y: h - dogH * 0.35,
+    y: h + dogH * 0.6,  // ИСПРАВЛЕНО: начинаем ЗА экраном снизу
+    targetY: h - dogH * 0.35,  // ДОБАВЛЕНО: целевая позиция (видна голова)
     w: dogW,
     h: dogH,
     vx: 80 + Math.random() * 40,
-    facing: 1
+    facing: 1,
+    emerging: true,  // ДОБАВЛЕНО: флаг анимации выползания
+    emergeSpeed: 60  // ДОБАВЛЕНО: скорость выползания (px/sec)
   };
 
   finalShowToast();
@@ -1208,24 +1217,18 @@ function triggerEasterFromFinal(ball) {
   var t = 0;
   if (video) t = video.currentTime || 0;
 
+  // ИСПРАВЛЕНО: детекция лупа видео — НЕ рестартим шары автоматически
   if (t + 0.15 < runtime.final.lastVideoT) {
-    runtime.final.ballsStarted = false;
-    runtime.final.ballsCleared = false;
-    runtime.final.hintShown = false;
-    runtime.final.congratsShown = false;
-    runtime.final.hintAt = 5.5 + Math.random() * 4.5;
-    runtime.final.congratsAt = 5.0;
-    finalHardClearBalls();
-    finalHideHint();
-    finalHideCongrats();
-    finalRemoveDog();
+    // Видео перескочило на начало, но шары НЕ трогаем
   }
   runtime.final.lastVideoT = t;
 
+  // Старт шаров только если НЕ были очищены вручную
   if (!runtime.final.ballsCleared && !runtime.final.ballsStarted && t >= 3.0) {
     runtime.final.ballsStarted = true;
     runtime.final.ballsFade01 = 1;
     runtime.final.fadeMode = 0;
+    runtime.final.ballsStartTime = t;  // ДОБАВЛЕНО: запомним время старта
     finalSpawnBalls(50);
     finalHideHint();
     finalHideCongrats();
@@ -1245,7 +1248,15 @@ function triggerEasterFromFinal(ball) {
     finalShowCongrats();
   }
 
-  finalUpdateBalls(dt);
+  // ДОБАВЛЕНО: заморозка шаров через 20 сек после старта
+  var ballsAge = runtime.final.ballsStarted ? (t - (runtime.final.ballsStartTime || 0)) : 0;
+  var shouldFreeze = runtime.final.ballsStarted && ballsAge >= 20.0;
+
+  if (!shouldFreeze) {
+    finalUpdateBalls(dt);
+  }
+  // Если shouldFreeze === true, то finalUpdateBalls не вызывается → шары застывают
+
   finalUpdateDog(dt);
   finalDraw();
 
@@ -1265,13 +1276,22 @@ function triggerEasterFromFinal(ball) {
   function finalRestartSequence() {
     if (!runtime.final) return;
 
-    finalFadeOutBalls();
+    // ИСПРАВЛЕНО: сбрасываем всё, чтобы шары автоматически стартовали через 3 сек
+    runtime.final.ballsStarted = false;
+    runtime.final.ballsCleared = false;  // ВАЖНО: снимаем флаг "очищено вручную"
+    runtime.final.hintShown = false;
+    runtime.final.congratsShown = false;
+    finalHardClearBalls();
+    finalHideHint();
+    finalHideCongrats();
+    finalRemoveDog();
 
     var v = runtime.final.videoEl;
     if (v) {
       try { v.currentTime = 0; } catch (e) {}
       v.play().catch(function(){});
     }
+  }
 
     runtime.final.ballsStarted = false;
     runtime.final.hintShown = false;
@@ -1592,6 +1612,16 @@ function finalUpdateDog(dt) {
   var rect = canvas.getBoundingClientRect();
   var w = rect.width;
 
+  // ДОБАВЛЕНО: анимация выползания снизу
+  if (dog.emerging) {
+    dog.y -= dog.emergeSpeed * dt;  // движение вверх
+    if (dog.y <= dog.targetY) {
+      dog.y = dog.targetY;
+      dog.emerging = false;  // выползание завершено
+    }
+  }
+
+  // Горизонтальное движение (туда-сюда)
   dog.x += dog.vx * dt;
 
   if (dog.x - dog.w * 0.5 < 0) {
@@ -1671,17 +1701,23 @@ function finalToggleBalls() {
   var btn = document.getElementById('finalClearBalls');
   if (!btn) return;
 
+  var video = runtime.final.videoEl;
+  var t = video ? (video.currentTime || 0) : 0;
+
   if (runtime.final.ballsCleared) {
+    // Был режим "шары убраны" → включаем "Шаропад"
     btn.textContent = 'Убрать шары';
     runtime.final.ballsCleared = false;
     runtime.final.ballsStarted = true;
     runtime.final.ballsFade01 = 1;
     runtime.final.fadeMode = 0;
+    runtime.final.ballsStartTime = t;  // ИСПРАВЛЕНО: используем время видео
     finalSpawnBalls(50);
     finalHideCongrats();
-    runtime.final.congratsAt = performance.now() / 1000 + 5.0;
+    runtime.final.congratsAt = t + 5.0;  // ИСПРАВЛЕНО: относительно видео
     runtime.final.congratsShown = false;
   } else {
+    // Был режим "шары есть" → убираем шары
     btn.textContent = 'Шаропад';
     runtime.final.ballsCleared = true;
     finalFadeOutBalls();
