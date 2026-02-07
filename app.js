@@ -247,16 +247,17 @@
   setupMusicAutoResume();
 
   function goToScreen(screenId) {
-    if (state.screenId === screenId) return;
+  if (state.screenId === screenId) return;
 
-    teardownPrologueRuntime();
-    teardownClimaxRuntime();
-    teardownFinalRuntime();
-    stopQ3Timer();
+  teardownPrologueRuntime();
+  teardownClimaxRuntime();
+  teardownFinalRuntime();
+  stopQ3Timer();
 
-    state.screenId = screenId;
-    saveState();
-    renderScreen();
+  state.screenId = screenId;
+  saveState();
+  renderScreen();
+}
 
     if (state.screenId === 'prologue') setupPrologueRuntime();
     if (state.screenId === 'quiz') startQ3TimerIfNeeded();
