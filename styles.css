@@ -49,14 +49,9 @@ html, body{
     radial-gradient(1200px 800px at 30% 20%, rgba(255,80,140,0.16), transparent 55%),
     radial-gradient(900px 700px at 70% 60%, rgba(90,140,255,0.14), transparent 60%),
     linear-gradient(160deg, rgba(12,16,35,1), rgba(25,30,60,1));
-  transform: translate3d(0,0,0) scale(1);
-  transform-origin: 50% 50%;
-  transition: transform var(--t-zoom) ease;
-  will-change: transform;
-}
-
-.stageBg.stageBg--zoomIn{
-  transform: translate3d(0,0,0) scale(1.045);
+  transform: translate3d(0,0,0);
+  /* УБРАНО: transition на transform — нет зума */
+  will-change: auto;
 }
 
 .safe{
@@ -72,10 +67,20 @@ html, body{
   inset: 0;
   display: grid;
   place-items: center;
-  transform: scale(0.985);
+  transform: translateX(0);
   opacity: 0;
-  transition: transform var(--t-base) ease, opacity var(--t-base) ease;
+  transition: transform 240ms ease-out, opacity 240ms ease-out;
   will-change: opacity, transform;
+}
+
+.screen.screen--out{
+  transform: translateX(-20px);
+  opacity: 0;
+}
+
+.screen.screen--active{
+  transform: translateX(0);
+  opacity: 1;
 }
 
 .screen.screen--out{
