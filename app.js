@@ -1025,6 +1025,8 @@ function moveNoButton(isFirstNudge) {
   var video = document.getElementById('finalVideo');
   var canvas = document.getElementById('finalCanvas');
   var hint = document.getElementById('finalHint');
+  var congrats = document.getElementById('finalCongrats');
+  var toast = document.getElementById('finalToast');
   var replayBtn = document.getElementById('finalReplay');
   var clearBtn = document.getElementById('finalClearBalls');
 
@@ -1041,14 +1043,25 @@ function moveNoButton(isFirstNudge) {
     balls: [],
     ballsStarted: false,
     ballsFade01: 1,
-    fadeMode: 0, // 0 none, 1 fade-out
+    fadeMode: 0,
+    ballsCleared: false,
 
     hintEl: hint,
     hintShown: false,
     hintAt: 6.0,
 
+    congratsEl: congrats,
+    congratsShown: false,
+    congratsAt: 5.0,
+
+    toastEl: toast,
+
     ballImg: null,
     ballImgReady: false,
+
+    dog: null,
+    dogImg: null,
+    dogImgReady: false,
 
     tripleCount: 0,
     tripleLastMs: 0,
@@ -1057,6 +1070,65 @@ function moveNoButton(isFirstNudge) {
     onPointerDown: null
   };
 
+  runtime.final.ctx = canvas.getContext('2d');
+
+  runtime.final.ballImg = new Image();
+  runtime.final.ballImg.onload = function () {
+    if (runtime.final) runtime.final.ballImgReady = true;
+  };
+  runtime.final.ballImg.onerror = function () {
+    if (runtime.final) runtime.final.ballImgReady = false;
+  };
+  runtime.final.ballImg.src = ASSETS.imgHeartBall;
+
+  runtime.final.dogImg = new Image();
+  runtime.final.dogImg.onload = function () {
+    if (runtime.final) runtime.final.dogImgReady = true;
+  };
+  runtime.final.dogImg.onerror = function () {
+    if (runtime.final) runtime.final.dogImgReady = false;
+  };
+  runtime.final.dogImg.src = ASSETS.imgDogQ3;
+
+  runtime.final.onPointerDown = function (ev) {
+    if (!runtime.final) return;
+    var rect = canvas.getBoundingClientRect();
+    var x = ev.clientX - rect.left;
+    var y = ev.clientY - rect.top;
+
+    var hit = finalHitBall(x, y);
+    if (!hit) return;
+
+    var now = performance.now();
+    if (now - runtime.final.tripleLastMs <= 650) runtime.final.tripleCount++;
+    else runtime.final.tripleCount = 1;
+    runtime.final.tripleLastMs = now;
+
+    if (runtime.final.tripleCount >= 3) {
+      runtime.final.tripleCount = 0;
+      triggerEasterFromFinal(hit);
+    }
+  };
+  canvas.addEventListener('pointerdown', runtime.final.onPointerDown);
+
+  runtime.final.onResize = function () { finalResizeCanvas(); };
+  window.addEventListener('resize', runtime.final.onResize);
+
+  if (replayBtn) replayBtn.addEventListener('click', finalRestartSequence);
+  if (clearBtn) clearBtn.addEventListener('click', finalToggleBalls);
+
+  video.muted = true;
+  video.loop = true;
+  video.play().catch(function(){});
+
+  finalResizeCanvas();
+
+  runtime.final.lastMs = performance.now();
+  runtime.final.lastVideoT = 0;
+
+  runtime.final.raf = requestAnimationFrame(finalTick);
+}
+  
   runtime.final.ctx = canvas.getContext('2d');
 
   // PNG шар
@@ -1153,29 +1225,86 @@ function finalHitBall(x, y) {
 
 // Заглушка под Стадию 9: пока просто лог в консоль, потом заменим на настоящую пасхалку
 function triggerEasterFromFinal(ball) {
-  console.log('EASTER TRIGGER on ball id=', ball && ball.id);
+  if (!runtime.final) return;
+  if (runtime.final.dog) return; // уже есть собака
+
+  var canvas = runtime.final.canvasEl;
+  var rect = canvas.getBoundingClientRect();
+  var w = rect.width;
+  var h = rect.height;
+
+  var dogW = Math.min(w, h) * 0.28;
+  var dogH = dogW * 0.85;
+
+  runtime.final.dog = {
+    x: w * 0.5,
+    y: h - dogH * 0.35,
+    w: dogW,
+    h: dogH,
+    vx: 80 + Math.random() * 40,
+    facing: 1
+  };
+
+  finalShowToast();
+  finalHideCongrats();
+  finalHideHint();
 }
 
   function finalTick(nowMs) {
-    if (!runtime.final) return;
+  if (!runtime.final) return;
 
-    var dt = (nowMs - runtime.final.lastMs) / 1000;
-    runtime.final.lastMs = nowMs;
-    if (!isFinite(dt) || dt <= 0) dt = 0.016;
-    if (dt > 0.05) dt = 0.05;
+  var dt = (nowMs - runtime.final.lastMs) / 1000;
+  runtime.final.lastMs = nowMs;
+  if (!isFinite(dt) || dt <= 0) dt = 0.016;
+  if (dt > 0.05) dt = 0.05;
 
-    var video = runtime.final.videoEl;
-    var t = 0;
-    if (video) t = video.currentTime || 0; // синхронизация по времени видео [web:453]
+  var video = runtime.final.videoEl;
+  var t = 0;
+  if (video) t = video.currentTime || 0;
 
-    // детект лупа (видео перескочило на начало)
-    if (t + 0.15 < runtime.final.lastVideoT) {
-      runtime.final.ballsStarted = false;
-      runtime.final.hintShown = false;
-      runtime.final.hintAt = 5.5 + Math.random() * 4.5;
-      finalHardClearBalls();
-      finalHideHint();
-    }
+  if (t + 0.15 < runtime.final.lastVideoT) {
+    runtime.final.ballsStarted = false;
+    runtime.final.ballsCleared = false;
+    runtime.final.hintShown = false;
+    runtime.final.congratsShown = false;
+    runtime.final.hintAt = 5.5 + Math.random() * 4.5;
+    runtime.final.congratsAt = 5.0;
+    finalHardClearBalls();
+    finalHideHint();
+    finalHideCongrats();
+    finalRemoveDog();
+  }
+  runtime.final.lastVideoT = t;
+
+  if (!runtime.final.ballsCleared && !runtime.final.ballsStarted && t >= 3.0) {
+    runtime.final.ballsStarted = true;
+    runtime.final.ballsFade01 = 1;
+    runtime.final.fadeMode = 0;
+    finalSpawnBalls(50);
+    finalHideHint();
+    finalHideCongrats();
+    runtime.final.hintAt = t + 2.0 + Math.random() * 3.5;
+    runtime.final.congratsAt = t + 5.0;
+    runtime.final.hintShown = false;
+    runtime.final.congratsShown = false;
+  }
+
+  if (runtime.final.ballsStarted && !runtime.final.hintShown && t >= runtime.final.hintAt) {
+    runtime.final.hintShown = true;
+    finalShowHint();
+  }
+
+  if (runtime.final.ballsStarted && !runtime.final.congratsShown && t >= runtime.final.congratsAt) {
+    runtime.final.congratsShown = true;
+    finalShowCongrats();
+  }
+
+  finalUpdateBalls(dt);
+  finalUpdateDog(dt);
+  finalDraw();
+
+  runtime.final.raf = requestAnimationFrame(finalTick);
+}
     runtime.final.lastVideoT = t;
 
     // старт шаров через 3 секунды после старта видео
@@ -1519,7 +1648,124 @@ function finalDraw() {
       ctx.fill();
     }
 
-    ctx.globalAlpha = 1;
+        ctx.globalAlpha = 1;
+  }
+
+  // Собака-бульдозер
+  if (runtime.final.dog && runtime.final.dogImgReady && runtime.final.dogImg) {
+    var dog = runtime.final.dog;
+    ctx.save();
+    ctx.translate(dog.x, dog.y);
+    if (dog.facing < 0) ctx.scale(-1, 1);
+    ctx.globalAlpha = 0.98;
+    ctx.drawImage(runtime.final.dogImg, -dog.w * 0.5, -dog.h * 0.5, dog.w, dog.h);
+    ctx.restore();
+  }
+}
+
+function finalUpdateDog(dt) {
+  if (!runtime.final || !runtime.final.dog) return;
+
+  var dog = runtime.final.dog;
+  var canvas = runtime.final.canvasEl;
+  var rect = canvas.getBoundingClientRect();
+  var w = rect.width;
+
+  dog.x += dog.vx * dt;
+
+  if (dog.x - dog.w * 0.5 < 0) {
+    dog.x = dog.w * 0.5;
+    dog.vx = Math.abs(dog.vx);
+    dog.facing = 1;
+  }
+  if (dog.x + dog.w * 0.5 > w) {
+    dog.x = w - dog.w * 0.5;
+    dog.vx = -Math.abs(dog.vx);
+    dog.facing = -1;
+  }
+
+  var balls = runtime.final.balls;
+  if (!balls) return;
+
+  for (var i = 0; i < balls.length; i++) {
+    var b = balls[i];
+
+    var dx = b.x - dog.x;
+    var dy = b.y - (dog.y - dog.h * 0.3);
+    var dist2 = dx*dx + dy*dy;
+    var minD = b.r + dog.w * 0.35;
+
+    if (dist2 > 0 && dist2 < minD*minD) {
+      var dist = Math.sqrt(dist2) || 0.001;
+      var nx = dx / dist;
+      var ny = dy / dist;
+
+      var overlap = minD - dist;
+      var push = overlap * 0.6;
+
+      b.x += nx * push;
+      b.y += ny * push;
+
+      var velAlong = b.vx * nx + b.vy * ny;
+      if (velAlong < 0) {
+        var j = -velAlong * 0.8;
+        b.vx += j * nx;
+        b.vy += j * ny;
+      }
+
+      b.vx *= 0.92;
+      b.vy *= 0.92;
+    }
+  }
+}
+
+function finalRemoveDog() {
+  if (!runtime.final) return;
+  runtime.final.dog = null;
+}
+
+function finalShowToast() {
+  if (!runtime.final || !runtime.final.toastEl) return;
+  runtime.final.toastEl.classList.add('finalToast--show');
+  setTimeout(function() {
+    if (runtime.final && runtime.final.toastEl) {
+      runtime.final.toastEl.classList.remove('finalToast--show');
+    }
+  }, 2200);
+}
+
+function finalShowCongrats() {
+  if (!runtime.final || !runtime.final.congratsEl) return;
+  runtime.final.congratsEl.classList.add('finalCongrats--show');
+}
+
+function finalHideCongrats() {
+  if (!runtime.final || !runtime.final.congratsEl) return;
+  runtime.final.congratsEl.classList.remove('finalCongrats--show');
+}
+
+function finalToggleBalls() {
+  if (!runtime.final) return;
+
+  var btn = document.getElementById('finalClearBalls');
+  if (!btn) return;
+
+  if (runtime.final.ballsCleared) {
+    btn.textContent = 'Убрать шары';
+    runtime.final.ballsCleared = false;
+    runtime.final.ballsStarted = true;
+    runtime.final.ballsFade01 = 1;
+    runtime.final.fadeMode = 0;
+    finalSpawnBalls(50);
+    finalHideCongrats();
+    runtime.final.congratsAt = performance.now() / 1000 + 5.0;
+    runtime.final.congratsShown = false;
+  } else {
+    btn.textContent = 'Шаропад';
+    runtime.final.ballsCleared = true;
+    finalFadeOutBalls();
+    finalRemoveDog();
+    finalHideCongrats();
   }
 }
 
