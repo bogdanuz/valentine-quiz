@@ -524,29 +524,24 @@ html, body{
 }
 
 .climaxYes{
-  width: 240px;                /* уже */
+  width: 240px;
   font-size: 22px;
   padding: 16px 18px;
   position: absolute;
-  left: 50%;
-  top: 40%;
-  transform: translate(-50%, -50%);
+  /* left/top зададим из JS, чтобы "ДА" и "НЕТ" стояли рядом */
 }
 
 .climaxNo{
-  width: 240px;                /* уже */
+  width: 240px;
   font-size: 22px;
   padding: 16px 18px;
   position: absolute;
-  left: 50%;
-  top: 58%;
-  transform: translate(-50%, -50%);
-  transition: left 420ms ease, top 420ms ease, transform 160ms ease;
+  transition: left 420ms ease, top 420ms ease, transform 160ms ease; /* плавнее */ /* [web:318] */
   will-change: left, top;
 }
 
 .climaxNo:active{
-  transform: translate(-50%, -50%) scale(0.98);
+  transform: scale(0.98);
 }
 
 /* ===== FINAL (заглушка) ===== */
