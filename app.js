@@ -23,6 +23,8 @@
     CORRECT_TITLE: 'ВЕРНО!',
     NEXT_Q_BTN: 'Следующий вопрос',
     OK_BTN: 'Окей'
+    GO_FURTHER: 'Идти дальше'
+
   };
 
   var ASSETS = {
@@ -546,19 +548,22 @@ if (q.id === 4) {
   }
 
   function goNextQuestion() {
-    if (!canGoNextFromCurrent()) return;
+  if (!canGoNextFromCurrent()) return;
 
-    var qIdx = qIndexFromState();
-    if (qIdx >= 4) {
-      // Стадия 6: тут будет переход на RESULT
-      return;
-    }
+  var qIdx = qIndexFromState();
 
-    state.quiz.currentQuestion = qIdx + 2;
-    saveState();
+  // Если был 5-й вопрос — сразу на climax
+  if (qIdx >= 4) {
     closeOverlay();
-    renderScreen();
+    goToScreen('climax');
+    return;
   }
+
+  state.quiz.currentQuestion = qIdx + 2;
+  saveState();
+  closeOverlay();
+  renderScreen();
+}
 
   function selectAnswer(answerIndex) {
     var qIdx = qIndexFromState();
@@ -625,12 +630,18 @@ if (q.id === 4) {
     var overlay = runtime.overlayEl;
     if (!overlay) return;
 
-    var btnText = (q.id === 5) ? UI.OK_BTN : UI.NEXT_Q_BTN;
+    var btnText = (q.id === 5) ? UI.GO_FURTHER : UI.NEXT_Q_BTN;
 
-    var stickerHtml = '';
-    if (withEdwardSticker === true) {
-      stickerHtml = '<img class="stickerEdward" src="' + escapeAttr(ASSETS.imgEdward) + '" alt="" />';
-    }
+...
+
+btn.addEventListener('click', function () {
+  if (q.id === 5) {
+    closeOverlay();
+    goToScreen('climax');
+    return;
+  }
+  goNextQuestion();
+});
 
     overlay.innerHTML = ''
       + '<div class="modal" id="modalRoot">'
