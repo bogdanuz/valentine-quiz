@@ -887,19 +887,14 @@ function moveNoButton(isFirstNudge) {
   var orbitSign = (Math.random() < 0.5) ? -1 : 1;
 
   // Скорость/разброс (первый толчок мягче)
-  var step = (isFirstNudge === true) ? 70 : 120;      // было 40/55
-  var orbit = (isFirstNudge === true) ? 35 : 80;      // движение "вбок" вокруг ДА
-  var jitter = (isFirstNudge === true) ? 10 : 22;
+  var step = (isFirstNudge === true) ? 95 : 175;     // дальше и быстрее
+var orbit = (isFirstNudge === true) ? 70 : 160;    // сильнее влево/вправо
+var jitter = (isFirstNudge === true) ? 16 : 34;
 
-  // Случайная добавка (чтобы не было одинаковых траекторий)
-  var jx = (Math.random() * 2 - 1) * jitter;
-  var jy = (Math.random() * 2 - 1) * jitter;
-
-  // Иногда делаем "рывок" сильнее (редко, чтобы было весело)
-  if (isFirstNudge !== true && Math.random() < 0.22) {
-    step *= 1.35;
-    orbit *= 1.25;
-  }
+if (isFirstNudge !== true && Math.random() < 0.35) {
+  step *= 1.55;
+  orbit *= 1.45;
+}
 
   // Итоговое смещение: отталкивание + орбита + шум
   var nextLeft = curLeft + dx * step + px * orbit * orbitSign + jx;
